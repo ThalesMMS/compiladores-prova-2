@@ -1294,6 +1294,40 @@ W.rule = (h) => {
   h.innerHTML = rule(d.prem ? d.prem.split('||') : [], d.conc, d.name);
 };
 
+/* Cada cartão preserva a regra original na frente e mostra a leitura por extenso atrás. */
+W.ruleFlips = (host) => {
+  $('.rulecard', host).forEach((card) => {
+    const explanation = $('.rule-explanation', card);
+    const heading = $('h4', card);
+    if (!explanation || !heading) return;
+    const title = heading.textContent.trim();
+    const front = el('div', { class: 'rulecard-face rulecard-front' });
+    const back = el('div', { class: 'rulecard-face rulecard-back', 'aria-hidden': 'true' });
+    const frontButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Mostrar explicação de ' + title }, '↻ Ver explicação');
+    const backButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Voltar à regra de ' + title }, '↻ Ver fórmula');
+    front.append(...[...card.childNodes].filter((node) => node !== explanation), frontButton);
+    back.append(el('h4', {}, title + ' · por extenso'), explanation, backButton);
+    back.inert = true;
+    backButton.tabIndex = -1;
+    const inner = el('div', { class: 'rulecard-inner' }, front, back);
+    card.replaceChildren(inner);
+    card.classList.add('flippable');
+    card.addEventListener('click', (event) => {
+      const selected = window.getSelection();
+      if (selected && !selected.isCollapsed && card.contains(selected.anchorNode) && card.contains(selected.focusNode)) return;
+      const fromButton = event.target.closest('.rulecard-toggle') !== null;
+      const flipped = card.classList.toggle('is-flipped');
+      front.inert = flipped;
+      back.inert = !flipped;
+      front.setAttribute('aria-hidden', String(flipped));
+      back.setAttribute('aria-hidden', String(!flipped));
+      frontButton.tabIndex = flipped ? -1 : 0;
+      backButton.tabIndex = flipped ? 0 : -1;
+      if (fromButton) (flipped ? backButton : frontButton).focus({ preventScroll: true });
+    });
+  });
+};
+
 const HIER = { Object: null, Int: 'Object', Bool: 'Object', String: 'Object', IO: 'Object', A: 'Object', B: 'A', C: 'A', D: 'B' };
 const ancestors = (t) => { const out = []; for (let x = t; x; x = HIER[x]) out.push(x); return out; };
 const join = (a, b) => { const A = ancestors(a); return ancestors(b).find((x) => A.includes(x)); };

@@ -708,27 +708,64 @@ F → intLit { print(intLit.lexeme) }</pre>
     <div class="eyebrow">Questão 3 · Referência</div>
     <h1>As regras de inferência vistas em aula</h1>
   </header>
-  <div class="rulecards">
-    <div class="rulecard"><h4>Literais</h4><div data-w="rule" data-prem="i é um literal inteiro" data-conc="O,M,C ⊢ i : Int" data-name="Int"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ true : Bool" data-name="True"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ false : Bool" data-name="False"></div></div>
-    <div class="rulecard"><h4>Variável</h4><div data-w="rule" data-prem="O(x) = T" data-conc="O,M,C ⊢ x : T" data-name="Var"></div><p>x sem declaração: erro; na recuperação, x : NoType.</p></div>
-    <div class="rulecard"><h4>Aritmética</h4><div data-w="rule" data-prem="op ∈ {+, −, *, /}||O,M,C ⊢ e₀ : Int||O,M,C ⊢ e₁ : Int" data-conc="O,M,C ⊢ e₀ op e₁ : Int" data-name="Arit."></div>
+  <p class="ruleflip-intro">Toque em um cartão para ver a regra por extenso; toque novamente para voltar à fórmula. Use os botões para navegar também pelo teclado.</p>
+  <div class="rulecards" data-w="ruleFlips">
+    <div class="rulecard"><h4>Literais</h4>
+  <div class="rule-explanation">
+    <p>O tipo de um literal vem do próprio valor escrito no programa: um número inteiro é <code>Int</code>; <code>true</code> e <code>false</code> são <code>Bool</code>. Para os booleanos, não é preciso consultar nenhuma variável.</p>
+    <p><b>Exemplo:</b> <code>42 : Int</code> e <code>true : Bool</code>. A conclusão é direta, sem outras premissas.</p>
+  </div><div data-w="rule" data-prem="i é um literal inteiro" data-conc="O,M,C ⊢ i : Int" data-name="Int"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ true : Bool" data-name="True"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ false : Bool" data-name="False"></div></div>
+    <div class="rulecard"><h4>Variável</h4>
+  <div class="rule-explanation">
+    <p>Se o ambiente de tipos <code>O</code> registra que a variável <code>x</code> tem tipo <code>T</code>, podemos concluir que <code>x</code> é do tipo <code>T</code> no contexto atual.</p>
+    <p><b>Exemplo:</b> se <code>O(x) = Int</code>, então <code>x : Int</code>. Uma variável não declarada gera erro; <code>NoType</code> é usado apenas para recuperar a análise.</p>
+  </div><div data-w="rule" data-prem="O(x) = T" data-conc="O,M,C ⊢ x : T" data-name="Var"></div><p>x sem declaração: erro; na recuperação, x : NoType.</p></div>
+    <div class="rulecard"><h4>Aritmética</h4>
+  <div class="rule-explanation">
+    <p>Para somar, subtrair, multiplicar ou dividir, as duas expressões devem ser do tipo <code>Int</code>. Se ambas forem inteiras, o resultado também será <code>Int</code>; se não forem, há erro de tipos.</p>
+    <p><b>Exemplo:</b> <code>2 + 3 : Int</code> é válido; <code>2 + true</code> é inválido. Esta regra não prevê conversão automática para <code>Float</code>.</p>
+  </div><div data-w="rule" data-prem="op ∈ {+, −, *, /}||O,M,C ⊢ e₀ : Int||O,M,C ⊢ e₁ : Int" data-conc="O,M,C ⊢ e₀ op e₁ : Int" data-name="Arit."></div>
 <pre class="code" style="font-size:.78rem">typeCheck(e₀ op e₁)
   t₀ := typeCheck(e₀)
   t₁ := typeCheck(e₁)
   se t₀ = Int e t₁ = Int: retorne Int
   senão: retorne ERRO</pre></div>
-    <div class="rulecard"><h4>New</h4><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀" data-conc="O,M,C ⊢ new T₀ : T₁" data-name="New"></div></div>
-    <div class="rulecard"><h4>If</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : Bool||O,M,C ⊢ e₁ : T₁||O,M,C ⊢ e₂ : T₂" data-conc="O,M,C ⊢ if e₀ then e₁ else e₂ fi : T₁ ⊔ T₂" data-name="If"></div></div>
-    <div class="rulecard"><h4>Let sem inicialização</h4><div data-w="rule" data-prem="O[T₀/x],M,C ⊢ e : T₁" data-conc="O,M,C ⊢ let x : T₀ in e : T₁" data-name="Let"></div><p>O[t/y]: atualiza o tipo associado a y no ambiente O para t.</p></div>
-    <div class="rulecard"><h4>Let com inicialização</h4><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀||O,M,C ⊢ e₀ : T₂||T₂ ≤ T₁||O[T₁/x],M,C ⊢ e₁ : T₃" data-conc="O,M,C ⊢ let x : T₀ &lt;- e₀ in e₁ : T₃" data-name="Let-init"></div><p>e₀ é tipado em O (sem x); e₁ em O[T₁/x]. Exemplo do quadro: let x : A &lt;- new B vale porque B ≤ A.</p>
+    <div class="rulecard"><h4>New</h4>
+  <div class="rule-explanation">
+    <p>A expressão <code>new T₀</code> cria um objeto e recebe o tipo <code>T₀</code>. Quando <code>T₀</code> é <code>SELF_TYPE</code>, o tipo é interpretado em relação à classe atual <code>C</code>, como <code>SELF_TYPE_C</code>.</p>
+    <p><b>Exemplo:</b> <code>new A : A</code>. Já <code>new SELF_TYPE</code> acompanha a classe do objeto atual.</p>
+  </div><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀" data-conc="O,M,C ⊢ new T₀ : T₁" data-name="New"></div></div>
+    <div class="rulecard"><h4>If</h4>
+  <div class="rule-explanation">
+    <p>A condição <code>e₀</code> deve ter tipo <code>Bool</code>. Se o ramo <code>then</code> tem tipo <code>T₁</code> e o ramo <code>else</code> tem tipo <code>T₂</code>, o <code>if</code> inteiro recebe o menor supertipo comum: <code>T₁ ⊔ T₂</code>.</p>
+    <p><b>Exemplo:</b> se <code>B</code> e <code>C</code> herdam de <code>A</code>, retornar <code>new B</code> num ramo e <code>new C</code> no outro faz o <code>if</code> ter tipo <code>A</code>, não <code>Bool</code>.</p>
+  </div><div data-w="rule" data-prem="O,M,C ⊢ e₀ : Bool||O,M,C ⊢ e₁ : T₁||O,M,C ⊢ e₂ : T₂" data-conc="O,M,C ⊢ if e₀ then e₁ else e₂ fi : T₁ ⊔ T₂" data-name="If"></div></div>
+    <div class="rulecard"><h4>Let sem inicialização</h4>
+  <div class="rule-explanation">
+    <p>Declare <code>x</code> com tipo <code>T₀</code> no ambiente <code>O</code> e analise o corpo <code>e</code> nesse ambiente ampliado. O tipo do <code>let</code> completo é <code>T₁</code>, ou seja, o tipo do corpo.</p>
+    <p><b>Exemplo:</b> <code>let x : Int in x + 1</code> tem tipo <code>Int</code>. A variável <code>x</code> fica visível no corpo do <code>let</code>.</p>
+  </div><div data-w="rule" data-prem="O[T₀/x],M,C ⊢ e : T₁" data-conc="O,M,C ⊢ let x : T₀ in e : T₁" data-name="Let"></div><p>O[t/y]: atualiza o tipo associado a y no ambiente O para t.</p></div>
+    <div class="rulecard"><h4>Let com inicialização</h4>
+  <div class="rule-explanation">
+    <p>Primeiro analise o inicializador <code>e₀</code> sem introduzir <code>x</code> no ambiente. Seu tipo <code>T₂</code> deve ser subtipo do tipo declarado <code>T₁</code> (resolvendo <code>SELF_TYPE</code>, se necessário). Depois declare <code>x : T₁</code> e analise o corpo <code>e₁</code>: o resultado do <code>let</code> é <code>T₃</code>, tipo desse corpo.</p>
+    <p><b>Exemplo:</b> <code>let x : A &lt;- new B in x</code> é válido se <code>B ≤ A</code>; o tipo estático da expressão é <code>A</code>.</p>
+  </div><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀||O,M,C ⊢ e₀ : T₂||T₂ ≤ T₁||O[T₁/x],M,C ⊢ e₁ : T₃" data-conc="O,M,C ⊢ let x : T₀ &lt;- e₀ in e₁ : T₃" data-name="Let-init"></div><p>e₀ é tipado em O (sem x); e₁ em O[T₁/x]. Exemplo do quadro: let x : A &lt;- new B vale porque B ≤ A.</p>
 <pre class="code" style="font-size:.78rem">type-check(let x : t₀ &lt;- e₀ in e₁)
   t₁ := SELF_TYPE(C) se t₀ = SELF_TYPE senão t₀
   t₂ := type-check(e₀)
   se não (t₂ ≤ t₁): reporte "tipo de e₀ …"
   atualize a tabela com o tipo de x
   retorne type-check(e₁)</pre></div>
-    <div class="rulecard"><h4>Despacho dinâmico</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||O,M,C ⊢ e₁ : T₁ … O,M,C ⊢ eₙ : Tₙ||M(T₀, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||T₁ ≤ T₁′ … Tₙ ≤ Tₙ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Despacho"></div><p>Se T₀ = SELF_TYPE_C, procura m em C. Sem receptor, e₀ é self.</p></div>
-    <div class="rulecard"><h4>Despacho estático</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||T₀ ≤ T||O,M,C ⊢ eᵢ : Tᵢ||M(T, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||Tᵢ ≤ Tᵢ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀@T.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Estático"></div><p>x@A.f() usa o f de A mesmo que x seja um B.</p></div>
+    <div class="rulecard"><h4>Despacho dinâmico</h4>
+  <div class="rule-explanation">
+    <p>Determine o tipo do receptor <code>e₀</code> e dos argumentos. Consulte em <code>M</code> a assinatura do método <code>m</code> para o tipo do receptor; cada argumento precisa ser compatível com o respectivo parâmetro. O resultado é o retorno declarado do método, ou o tipo do receptor se o retorno for <code>SELF_TYPE</code>.</p>
+    <p><b>Exemplo:</b> em <code>obj.m(a)</code>, a implementação executada depende da classe real de <code>obj</code>. Sem receptor explícito, usa-se <code>self</code>.</p>
+  </div><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||O,M,C ⊢ e₁ : T₁ … O,M,C ⊢ eₙ : Tₙ||M(T₀, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||T₁ ≤ T₁′ … Tₙ ≤ Tₙ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Despacho"></div><p>Se T₀ = SELF_TYPE_C, procura m em C. Sem receptor, e₀ é self.</p></div>
+    <div class="rulecard"><h4>Despacho estático</h4>
+  <div class="rule-explanation">
+    <p>Em <code>e₀@T.m(...)</code>, o tipo do receptor deve ser subtipo de <code>T</code>. O método é procurado especificamente na classe <code>T</code> e os argumentos devem respeitar seus parâmetros. O resultado segue o retorno declarado; se ele for <code>SELF_TYPE</code>, usa-se o tipo do receptor <code>e₀</code>.</p>
+    <p><b>Exemplo:</b> se <code>B</code> herda de <code>A</code>, <code>x@A.f()</code> escolhe a implementação de <code>f</code> de <code>A</code>, mesmo quando <code>x</code> contém um objeto <code>B</code>.</p>
+  </div><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||T₀ ≤ T||O,M,C ⊢ eᵢ : Tᵢ||M(T, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||Tᵢ ≤ Tᵢ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀@T.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Estático"></div><p>x@A.f() usa o f de A mesmo que x seja um B.</p></div>
   </div>
 </section>
 

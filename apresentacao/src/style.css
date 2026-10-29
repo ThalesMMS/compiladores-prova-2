@@ -366,10 +366,41 @@ textarea.gram {
 .rulecard .prem { flex-direction: column; align-items: center; gap: 2px; }
 .rule .rname { font-family: var(--font-body); font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
 .rulebox { overflow-x: auto; padding: 8px 4px; }
+.ruleflip-intro { color: var(--ink-2); font-size: 0.9rem; margin: 0 0 12px; }
 .rulecards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); }
 .rulecard { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
 .rulecard h4 { margin: 0 0 4px; font-size: 0.9rem; }
 .rulecard p { font-size: 0.86rem; color: var(--ink-2); margin: 6px 0 0; }
+/* A estrutura original continua legível mesmo sem JavaScript. */
+.rulecard.flippable { background: transparent; border: 0; padding: 0; perspective: 1200px; cursor: pointer; }
+.rulecard.flippable .rulecard-inner {
+  display: grid; height: 100%; transform-style: preserve-3d;
+  transition: transform 0.48s cubic-bezier(.2, .75, .2, 1);
+}
+.rulecard.flippable.is-flipped .rulecard-inner { transform: rotateY(180deg); }
+.rulecard.flippable .rulecard-face {
+  grid-area: 1 / 1; display: flex; flex-direction: column; min-width: 0;
+  padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--rule);
+  background: var(--sheet); backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.rulecard.flippable .rulecard-front { transform: rotateY(0deg); }
+.rulecard.flippable .rulecard-back {
+  transform: rotateY(180deg); background: var(--marker-wash); border-color: var(--marker);
+}
+.rulecard.flippable .rulecard-face > .rulecard-toggle {
+  display: inline-flex; align-self: flex-start; margin-top: auto;
+  padding: 8px 0 0; border: 0; background: transparent; color: var(--marker);
+  font-size: 0.82rem; font-weight: 700; cursor: pointer; text-align: left;
+}
+.rulecard.flippable .rulecard-face > .rulecard-toggle:focus-visible {
+  outline: 2px solid var(--marker); outline-offset: 3px; border-radius: 2px;
+}
+.rulecard.flippable .rule-explanation { flex: 1; }
+.rulecard.flippable .rule-explanation p { color: var(--ink); line-height: 1.48; margin: 8px 0; }
+.rulecard.flippable:hover .rulecard-face { border-color: var(--marker); }
+@media (prefers-reduced-motion: reduce) {
+  .rulecard.flippable .rulecard-inner { transition: none; }
+}
 .slot { display: inline-block; min-width: 2.4em; padding: 0 4px; border-radius: 4px; background: var(--hl); }
 .slot.empty { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); }
 .bad { color: var(--conflict); font-weight: 700; }

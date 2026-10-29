@@ -376,10 +376,41 @@ textarea.gram {
 .rulecard .prem { flex-direction: column; align-items: center; gap: 2px; }
 .rule .rname { font-family: var(--font-body); font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
 .rulebox { overflow-x: auto; padding: 8px 4px; }
+.ruleflip-intro { color: var(--ink-2); font-size: 0.9rem; margin: 0 0 12px; }
 .rulecards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); }
 .rulecard { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
 .rulecard h4 { margin: 0 0 4px; font-size: 0.9rem; }
 .rulecard p { font-size: 0.86rem; color: var(--ink-2); margin: 6px 0 0; }
+/* A estrutura original continua legível mesmo sem JavaScript. */
+.rulecard.flippable { background: transparent; border: 0; padding: 0; perspective: 1200px; cursor: pointer; }
+.rulecard.flippable .rulecard-inner {
+  display: grid; height: 100%; transform-style: preserve-3d;
+  transition: transform 0.48s cubic-bezier(.2, .75, .2, 1);
+}
+.rulecard.flippable.is-flipped .rulecard-inner { transform: rotateY(180deg); }
+.rulecard.flippable .rulecard-face {
+  grid-area: 1 / 1; display: flex; flex-direction: column; min-width: 0;
+  padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--rule);
+  background: var(--sheet); backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.rulecard.flippable .rulecard-front { transform: rotateY(0deg); }
+.rulecard.flippable .rulecard-back {
+  transform: rotateY(180deg); background: var(--marker-wash); border-color: var(--marker);
+}
+.rulecard.flippable .rulecard-face > .rulecard-toggle {
+  display: inline-flex; align-self: flex-start; margin-top: auto;
+  padding: 8px 0 0; border: 0; background: transparent; color: var(--marker);
+  font-size: 0.82rem; font-weight: 700; cursor: pointer; text-align: left;
+}
+.rulecard.flippable .rulecard-face > .rulecard-toggle:focus-visible {
+  outline: 2px solid var(--marker); outline-offset: 3px; border-radius: 2px;
+}
+.rulecard.flippable .rule-explanation { flex: 1; }
+.rulecard.flippable .rule-explanation p { color: var(--ink); line-height: 1.48; margin: 8px 0; }
+.rulecard.flippable:hover .rulecard-face { border-color: var(--marker); }
+@media (prefers-reduced-motion: reduce) {
+  .rulecard.flippable .rulecard-inner { transition: none; }
+}
 .slot { display: inline-block; min-width: 2.4em; padding: 0 4px; border-radius: 4px; background: var(--hl); }
 .slot.empty { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); }
 .bad { color: var(--conflict); font-weight: 700; }
@@ -1190,27 +1221,64 @@ F → intLit { print(intLit.lexeme) }</pre>
     <div class="eyebrow">Questão 3 · Referência</div>
     <h1>As regras de inferência vistas em aula</h1>
   </header>
-  <div class="rulecards">
-    <div class="rulecard"><h4>Literais</h4><div data-w="rule" data-prem="i é um literal inteiro" data-conc="O,M,C ⊢ i : Int" data-name="Int"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ true : Bool" data-name="True"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ false : Bool" data-name="False"></div></div>
-    <div class="rulecard"><h4>Variável</h4><div data-w="rule" data-prem="O(x) = T" data-conc="O,M,C ⊢ x : T" data-name="Var"></div><p>x sem declaração: erro; na recuperação, x : NoType.</p></div>
-    <div class="rulecard"><h4>Aritmética</h4><div data-w="rule" data-prem="op ∈ {+, −, *, /}||O,M,C ⊢ e₀ : Int||O,M,C ⊢ e₁ : Int" data-conc="O,M,C ⊢ e₀ op e₁ : Int" data-name="Arit."></div>
+  <p class="ruleflip-intro">Toque em um cartão para ver a regra por extenso; toque novamente para voltar à fórmula. Use os botões para navegar também pelo teclado.</p>
+  <div class="rulecards" data-w="ruleFlips">
+    <div class="rulecard"><h4>Literais</h4>
+  <div class="rule-explanation">
+    <p>O tipo de um literal vem do próprio valor escrito no programa: um número inteiro é <code>Int</code>; <code>true</code> e <code>false</code> são <code>Bool</code>. Para os booleanos, não é preciso consultar nenhuma variável.</p>
+    <p><b>Exemplo:</b> <code>42 : Int</code> e <code>true : Bool</code>. A conclusão é direta, sem outras premissas.</p>
+  </div><div data-w="rule" data-prem="i é um literal inteiro" data-conc="O,M,C ⊢ i : Int" data-name="Int"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ true : Bool" data-name="True"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ false : Bool" data-name="False"></div></div>
+    <div class="rulecard"><h4>Variável</h4>
+  <div class="rule-explanation">
+    <p>Se o ambiente de tipos <code>O</code> registra que a variável <code>x</code> tem tipo <code>T</code>, podemos concluir que <code>x</code> é do tipo <code>T</code> no contexto atual.</p>
+    <p><b>Exemplo:</b> se <code>O(x) = Int</code>, então <code>x : Int</code>. Uma variável não declarada gera erro; <code>NoType</code> é usado apenas para recuperar a análise.</p>
+  </div><div data-w="rule" data-prem="O(x) = T" data-conc="O,M,C ⊢ x : T" data-name="Var"></div><p>x sem declaração: erro; na recuperação, x : NoType.</p></div>
+    <div class="rulecard"><h4>Aritmética</h4>
+  <div class="rule-explanation">
+    <p>Para somar, subtrair, multiplicar ou dividir, as duas expressões devem ser do tipo <code>Int</code>. Se ambas forem inteiras, o resultado também será <code>Int</code>; se não forem, há erro de tipos.</p>
+    <p><b>Exemplo:</b> <code>2 + 3 : Int</code> é válido; <code>2 + true</code> é inválido. Esta regra não prevê conversão automática para <code>Float</code>.</p>
+  </div><div data-w="rule" data-prem="op ∈ {+, −, *, /}||O,M,C ⊢ e₀ : Int||O,M,C ⊢ e₁ : Int" data-conc="O,M,C ⊢ e₀ op e₁ : Int" data-name="Arit."></div>
 <pre class="code" style="font-size:.78rem">typeCheck(e₀ op e₁)
   t₀ := typeCheck(e₀)
   t₁ := typeCheck(e₁)
   se t₀ = Int e t₁ = Int: retorne Int
   senão: retorne ERRO</pre></div>
-    <div class="rulecard"><h4>New</h4><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀" data-conc="O,M,C ⊢ new T₀ : T₁" data-name="New"></div></div>
-    <div class="rulecard"><h4>If</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : Bool||O,M,C ⊢ e₁ : T₁||O,M,C ⊢ e₂ : T₂" data-conc="O,M,C ⊢ if e₀ then e₁ else e₂ fi : T₁ ⊔ T₂" data-name="If"></div></div>
-    <div class="rulecard"><h4>Let sem inicialização</h4><div data-w="rule" data-prem="O[T₀/x],M,C ⊢ e : T₁" data-conc="O,M,C ⊢ let x : T₀ in e : T₁" data-name="Let"></div><p>O[t/y]: atualiza o tipo associado a y no ambiente O para t.</p></div>
-    <div class="rulecard"><h4>Let com inicialização</h4><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀||O,M,C ⊢ e₀ : T₂||T₂ ≤ T₁||O[T₁/x],M,C ⊢ e₁ : T₃" data-conc="O,M,C ⊢ let x : T₀ &lt;- e₀ in e₁ : T₃" data-name="Let-init"></div><p>e₀ é tipado em O (sem x); e₁ em O[T₁/x]. Exemplo do quadro: let x : A &lt;- new B vale porque B ≤ A.</p>
+    <div class="rulecard"><h4>New</h4>
+  <div class="rule-explanation">
+    <p>A expressão <code>new T₀</code> cria um objeto e recebe o tipo <code>T₀</code>. Quando <code>T₀</code> é <code>SELF_TYPE</code>, o tipo é interpretado em relação à classe atual <code>C</code>, como <code>SELF_TYPE_C</code>.</p>
+    <p><b>Exemplo:</b> <code>new A : A</code>. Já <code>new SELF_TYPE</code> acompanha a classe do objeto atual.</p>
+  </div><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀" data-conc="O,M,C ⊢ new T₀ : T₁" data-name="New"></div></div>
+    <div class="rulecard"><h4>If</h4>
+  <div class="rule-explanation">
+    <p>A condição <code>e₀</code> deve ter tipo <code>Bool</code>. Se o ramo <code>then</code> tem tipo <code>T₁</code> e o ramo <code>else</code> tem tipo <code>T₂</code>, o <code>if</code> inteiro recebe o menor supertipo comum: <code>T₁ ⊔ T₂</code>.</p>
+    <p><b>Exemplo:</b> se <code>B</code> e <code>C</code> herdam de <code>A</code>, retornar <code>new B</code> num ramo e <code>new C</code> no outro faz o <code>if</code> ter tipo <code>A</code>, não <code>Bool</code>.</p>
+  </div><div data-w="rule" data-prem="O,M,C ⊢ e₀ : Bool||O,M,C ⊢ e₁ : T₁||O,M,C ⊢ e₂ : T₂" data-conc="O,M,C ⊢ if e₀ then e₁ else e₂ fi : T₁ ⊔ T₂" data-name="If"></div></div>
+    <div class="rulecard"><h4>Let sem inicialização</h4>
+  <div class="rule-explanation">
+    <p>Declare <code>x</code> com tipo <code>T₀</code> no ambiente <code>O</code> e analise o corpo <code>e</code> nesse ambiente ampliado. O tipo do <code>let</code> completo é <code>T₁</code>, ou seja, o tipo do corpo.</p>
+    <p><b>Exemplo:</b> <code>let x : Int in x + 1</code> tem tipo <code>Int</code>. A variável <code>x</code> fica visível no corpo do <code>let</code>.</p>
+  </div><div data-w="rule" data-prem="O[T₀/x],M,C ⊢ e : T₁" data-conc="O,M,C ⊢ let x : T₀ in e : T₁" data-name="Let"></div><p>O[t/y]: atualiza o tipo associado a y no ambiente O para t.</p></div>
+    <div class="rulecard"><h4>Let com inicialização</h4>
+  <div class="rule-explanation">
+    <p>Primeiro analise o inicializador <code>e₀</code> sem introduzir <code>x</code> no ambiente. Seu tipo <code>T₂</code> deve ser subtipo do tipo declarado <code>T₁</code> (resolvendo <code>SELF_TYPE</code>, se necessário). Depois declare <code>x : T₁</code> e analise o corpo <code>e₁</code>: o resultado do <code>let</code> é <code>T₃</code>, tipo desse corpo.</p>
+    <p><b>Exemplo:</b> <code>let x : A &lt;- new B in x</code> é válido se <code>B ≤ A</code>; o tipo estático da expressão é <code>A</code>.</p>
+  </div><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀||O,M,C ⊢ e₀ : T₂||T₂ ≤ T₁||O[T₁/x],M,C ⊢ e₁ : T₃" data-conc="O,M,C ⊢ let x : T₀ &lt;- e₀ in e₁ : T₃" data-name="Let-init"></div><p>e₀ é tipado em O (sem x); e₁ em O[T₁/x]. Exemplo do quadro: let x : A &lt;- new B vale porque B ≤ A.</p>
 <pre class="code" style="font-size:.78rem">type-check(let x : t₀ &lt;- e₀ in e₁)
   t₁ := SELF_TYPE(C) se t₀ = SELF_TYPE senão t₀
   t₂ := type-check(e₀)
   se não (t₂ ≤ t₁): reporte "tipo de e₀ …"
   atualize a tabela com o tipo de x
   retorne type-check(e₁)</pre></div>
-    <div class="rulecard"><h4>Despacho dinâmico</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||O,M,C ⊢ e₁ : T₁ … O,M,C ⊢ eₙ : Tₙ||M(T₀, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||T₁ ≤ T₁′ … Tₙ ≤ Tₙ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Despacho"></div><p>Se T₀ = SELF_TYPE_C, procura m em C. Sem receptor, e₀ é self.</p></div>
-    <div class="rulecard"><h4>Despacho estático</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||T₀ ≤ T||O,M,C ⊢ eᵢ : Tᵢ||M(T, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||Tᵢ ≤ Tᵢ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀@T.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Estático"></div><p>x@A.f() usa o f de A mesmo que x seja um B.</p></div>
+    <div class="rulecard"><h4>Despacho dinâmico</h4>
+  <div class="rule-explanation">
+    <p>Determine o tipo do receptor <code>e₀</code> e dos argumentos. Consulte em <code>M</code> a assinatura do método <code>m</code> para o tipo do receptor; cada argumento precisa ser compatível com o respectivo parâmetro. O resultado é o retorno declarado do método, ou o tipo do receptor se o retorno for <code>SELF_TYPE</code>.</p>
+    <p><b>Exemplo:</b> em <code>obj.m(a)</code>, a implementação executada depende da classe real de <code>obj</code>. Sem receptor explícito, usa-se <code>self</code>.</p>
+  </div><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||O,M,C ⊢ e₁ : T₁ … O,M,C ⊢ eₙ : Tₙ||M(T₀, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||T₁ ≤ T₁′ … Tₙ ≤ Tₙ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Despacho"></div><p>Se T₀ = SELF_TYPE_C, procura m em C. Sem receptor, e₀ é self.</p></div>
+    <div class="rulecard"><h4>Despacho estático</h4>
+  <div class="rule-explanation">
+    <p>Em <code>e₀@T.m(...)</code>, o tipo do receptor deve ser subtipo de <code>T</code>. O método é procurado especificamente na classe <code>T</code> e os argumentos devem respeitar seus parâmetros. O resultado segue o retorno declarado; se ele for <code>SELF_TYPE</code>, usa-se o tipo do receptor <code>e₀</code>.</p>
+    <p><b>Exemplo:</b> se <code>B</code> herda de <code>A</code>, <code>x@A.f()</code> escolhe a implementação de <code>f</code> de <code>A</code>, mesmo quando <code>x</code> contém um objeto <code>B</code>.</p>
+  </div><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||T₀ ≤ T||O,M,C ⊢ eᵢ : Tᵢ||M(T, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||Tᵢ ≤ Tᵢ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀@T.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Estático"></div><p>x@A.f() usa o f de A mesmo que x seja um B.</p></div>
   </div>
 </section>
 
@@ -1728,7 +1796,7 @@ if (typeof module !== 'undefined') module.exports = LR;
 <script>
 /* ===================== utilidades ===================== */
 const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const $ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SVGNS = 'http://www.w3.org/2000/svg';
 let uid = 0;
@@ -2131,16 +2199,16 @@ function tableBox(T, opts = {}) {
   wrap.append(legend, tw, conf, why);
   let selKey = null;
   function select(s, sym, silent) {
-    $$('.sel', table).forEach((x) => x.classList.remove('sel'));
-    $$('tr.rowsel', table).forEach((x) => x.classList.remove('rowsel'));
-    $$('th.colsel', table).forEach((x) => x.classList.remove('colsel'));
+    $('.sel', table).forEach((x) => x.classList.remove('sel'));
+    $('tr.rowsel', table).forEach((x) => x.classList.remove('rowsel'));
+    $('th.colsel', table).forEach((x) => x.classList.remove('colsel'));
     if (s == null) return;
     selKey = `${s}|${sym}`;
     const td = cells[selKey];
     if (td) td.classList.add('sel');
     const row = $(`tr[data-row="${s}"]`, tbody);
     if (row) row.classList.add('rowsel');
-    const th = $$('th[data-col]', thead).find((x) => x.dataset.col === sym);
+    const th = $('th[data-col]', thead).find((x) => x.dataset.col === sym);
     if (th) th.classList.add('colsel');
     if (!silent) { why.hidden = false; why.innerHTML = `<p class="stepinfo">Célula [${esc(LR.stateLabel(C, s))}, ${esc(sym)}]</p>` + cellWhy(T, s, sym); }
   }
@@ -3022,6 +3090,40 @@ W.rule = (h) => {
   h.innerHTML = rule(d.prem ? d.prem.split('||') : [], d.conc, d.name);
 };
 
+/* Cada cartão preserva a regra original na frente e mostra a leitura por extenso atrás. */
+W.ruleFlips = (host) => {
+  $('.rulecard', host).forEach((card) => {
+    const explanation = $('.rule-explanation', card);
+    const heading = $('h4', card);
+    if (!explanation || !heading) return;
+    const title = heading.textContent.trim();
+    const front = el('div', { class: 'rulecard-face rulecard-front' });
+    const back = el('div', { class: 'rulecard-face rulecard-back', 'aria-hidden': 'true' });
+    const frontButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Mostrar explicação de ' + title }, '↻ Ver explicação');
+    const backButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Voltar à regra de ' + title }, '↻ Ver fórmula');
+    front.append(...[...card.childNodes].filter((node) => node !== explanation), frontButton);
+    back.append(el('h4', {}, title + ' · por extenso'), explanation, backButton);
+    back.inert = true;
+    backButton.tabIndex = -1;
+    const inner = el('div', { class: 'rulecard-inner' }, front, back);
+    card.replaceChildren(inner);
+    card.classList.add('flippable');
+    card.addEventListener('click', (event) => {
+      const selected = window.getSelection();
+      if (selected && !selected.isCollapsed && card.contains(selected.anchorNode) && card.contains(selected.focusNode)) return;
+      const fromButton = event.target.closest('.rulecard-toggle') !== null;
+      const flipped = card.classList.toggle('is-flipped');
+      front.inert = flipped;
+      back.inert = !flipped;
+      front.setAttribute('aria-hidden', String(flipped));
+      back.setAttribute('aria-hidden', String(!flipped));
+      frontButton.tabIndex = flipped ? -1 : 0;
+      backButton.tabIndex = flipped ? 0 : -1;
+      if (fromButton) (flipped ? backButton : frontButton).focus({ preventScroll: true });
+    });
+  });
+};
+
 const HIER = { Object: null, Int: 'Object', Bool: 'Object', String: 'Object', IO: 'Object', A: 'Object', B: 'A', C: 'A', D: 'B' };
 const ancestors = (t) => { const out = []; for (let x = t; x; x = HIER[x]) out.push(x); return out; };
 const join = (a, b) => { const A = ancestors(a); return ancestors(b).find((x) => A.includes(x)); };
@@ -3137,7 +3239,7 @@ W.typeOk = (h) => typeStepper(h, { ...LET_OK, envs: ENVS_OK });
 
 /* ===================== navegação entre slides ===================== */
 function initDeck() {
-  const slides = $$('.slide');
+  const slides = $('.slide');
   const index = $('#index');
   const counter = $('#counter');
   const progress = $('#progress');
@@ -3167,16 +3269,16 @@ function initDeck() {
     const s = slides[i];
     if (!mounted.has(s.id)) {
       mounted.add(s.id);
-      $$('[data-w]', s).forEach((hst) => {
+      $('[data-w]', s).forEach((hst) => {
         try { W[hst.dataset.w](hst); } catch (e) { console.error(e); hst.append(el('p', { class: 'err-msg' }, 'Erro ao montar este exemplo: ' + e.message)); }
       });
     }
-    $$('#index a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + s.id ? 'page' : 'false'));
+    $('#index a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + s.id ? 'page' : 'false'));
     const cur = $('#index a[aria-current="page"]');
     if (cur) cur.scrollIntoView({ block: 'nearest' });
     counter.textContent = `${i + 1} / ${slides.length}`;
     progress.style.width = `${((i + 1) / slides.length) * 100}%`;
-    $$('.modtab').forEach((b) => b.setAttribute('aria-current', String(b.dataset.mod === s.dataset.mod)));
+    $('.modtab').forEach((b) => b.setAttribute('aria-current', String(b.dataset.mod === s.dataset.mod)));
     const p = slides[i - 1];
     const n = slides[i + 1];
     prevA.hidden = !p;
@@ -3202,7 +3304,7 @@ function initDeck() {
   $('#mnext').onclick = () => go(1);
   $('#menu').onclick = () => document.body.classList.toggle('index-open');
   $('#scrim').onclick = () => document.body.classList.remove('index-open');
-  $$('.modtab').forEach((b) => { b.onclick = () => { const s = slides.find((x) => x.dataset.mod === b.dataset.mod); if (s) location.hash = s.id; }; });
+  $('.modtab').forEach((b) => { b.onclick = () => { const s = slides.find((x) => x.dataset.mod === b.dataset.mod); if (s) location.hash = s.id; }; });
   show(location.hash.slice(1), false);
 }
 document.addEventListener('DOMContentLoaded', initDeck);
