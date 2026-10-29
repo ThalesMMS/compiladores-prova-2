@@ -498,3 +498,38 @@ textarea.gram {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Leituras por extenso: HTML nativo, disponível também sem JavaScript. */
+.didactic-note {
+  margin: 0 0 20px;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--marker);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink);
+}
+.didactic-note > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.didactic-note > summary::marker { color: var(--marker); }
+.didactic-note > summary:focus-visible {
+  outline: 2px solid var(--marker);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}
+.didactic-note[open] > summary {
+  border-bottom: 1px solid var(--rule);
+  background: var(--marker-wash);
+}
+.didactic-note .didactic-body { padding: 4px 16px 16px; }
+.didactic-note .didactic-body h3 { margin: 14px 0 5px; font-size: 1rem; }
+.didactic-note .didactic-body p { margin: 6px 0; line-height: 1.55; }
+.didactic-note code { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .didactic-note > summary { padding: 12px; }
+  .didactic-note .didactic-body { padding: 2px 12px 12px; }
+}

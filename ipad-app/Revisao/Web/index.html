@@ -509,6 +509,41 @@ textarea.gram {
   * { transition: none !important; animation: none !important; }
 }
 
+/* Leituras por extenso: HTML nativo, disponível também sem JavaScript. */
+.didactic-note {
+  margin: 0 0 20px;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--marker);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink);
+}
+.didactic-note > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.didactic-note > summary::marker { color: var(--marker); }
+.didactic-note > summary:focus-visible {
+  outline: 2px solid var(--marker);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}
+.didactic-note[open] > summary {
+  border-bottom: 1px solid var(--rule);
+  background: var(--marker-wash);
+}
+.didactic-note .didactic-body { padding: 4px 16px 16px; }
+.didactic-note .didactic-body h3 { margin: 14px 0 5px; font-size: 1rem; }
+.didactic-note .didactic-body p { margin: 6px 0; line-height: 1.55; }
+.didactic-note code { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .didactic-note > summary { padding: 12px; }
+  .didactic-note .didactic-body { padding: 2px 12px 12px; }
+}
+
 </style>
 <script src="vendor/dagre.min.js"></script>
 </head>
@@ -589,8 +624,21 @@ textarea.gram {
   <header>
     <div class="eyebrow">Questão 1 · Análise sintática ascendente</div>
     <h1>Construir o autômato e a tabela em seis passos</h1>
-    <p class="lede">Toda questão de LR segue a mesma receita. O que muda entre LR(0), SLR, LR(1) e LALR é só o passo 4: em quais colunas entram as reduções.</p>
+    <p class="lede">Toda questão de LR segue o mesmo roteiro. LR(0) e SLR usam o mesmo autômato; LR(1) acrescenta lookaheads e pode criar mais estados; LALR funde estados LR(1) de mesmo núcleo. As colunas das reduções também dependem do método.</p>
   </header>
+  <details class="didactic-note" id="q1-roteiro-por-extenso" data-didactic-for="q1-roteiro">
+    <summary>Por extenso: Do texto da gramática à decisão do parser</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>O parser recebe tokens e precisa decidir: “leio mais um token ou já reconheci uma construção inteira?”. Cada estado reúne itens que descrevem as possibilidades naquele ponto. O autômato mostra como essas possibilidades mudam; a tabela transforma isso em instruções para o parser.</p>
+      <p><code>closure</code> significa “inclua também as produções que posso precisar começar agora”. <code>goto(I, X)</code> significa “partindo do estado I, reconheça X, avance os pontos correspondentes e complete o novo conjunto com closure”. Repita até não aparecer nenhum conjunto novo.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Com <code>S → a</code>, o estado inicial contém <code>Start → • S</code> e <code>S → • a</code>. A seta por <code>a</code> chega a <code>S → a •</code>: o <code>a</code> foi reconhecido e pode ser reduzido a <code>S</code>. A seta por <code>S</code> chega a <code>Start → S •</code>: ao encontrar o fim da entrada, aceite.</p>
+      <p>Na tabela, uma seta por terminal vira deslocamento; por não terminal, Goto. Um item comum terminado autoriza redução nas colunas permitidas pelo método. O item aumentado terminado autoriza aceitação em <code>eof</code>.</p>
+      <h3>Não confunda</h3>
+      <p>O roteiro é comum, mas não muda apenas a tabela: LR(1) acrescenta lookaheads aos itens e pode separar estados; LALR funde estados LR(1) de mesmo núcleo. LR(0) e SLR, por sua vez, usam o mesmo autômato.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>A receita</h3>
@@ -639,6 +687,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>O que um item diz, e de onde sai o lookahead</h1>
     <p class="lede">Um item LR(1) <code>[A → B • C f, a]</code> lê-se: “já reconheci B; ainda faltam C f; quando a produção inteira terminar, o próximo token pode ser a”.</p>
   </header>
+  <details class="didactic-note" id="q1-itens-por-extenso" data-didactic-for="q1-itens">
+    <summary>Por extenso: O ponto é progresso; o lookahead é contexto</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Leia <code>[A → B • C f, a]</code> assim: “nesta possibilidade, B já foi reconhecido; ainda preciso reconhecer C e depois f; quando toda a produção de A terminar, o próximo token poderá ser a”. O <code>a</code> depois da vírgula não faz parte da produção.</p>
+      <p>Se o ponto está antes de Y, preciso abrir as possibilidades de Y. Para saber em que contexto Y pode terminar, olho o que vem depois dele: a sequência β e, caso ela possa desaparecer, o lookahead ℓ do item original. É isso que <code>FIRST(β ℓ)</code> calcula.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Em <code>[A → B • C f, a]</code>, depois de C vem f. Logo, ao abrir <code>C → c</code>, acrescento <code>[C → • c, f]</code>. Em <code>[A → B • C, a]</code>, não há nada depois de C; acrescento <code>[C → • c, a]</code>. Se os dois itens estão no estado, aparecem os dois lookaheads: <code>{a, f}</code>.</p>
+      <p>Se β fosse um não terminal que produz <code>c</code> ou ε, os lookaheads incluiriam <code>c</code> e ℓ. Ser anulável não apaga as outras possibilidades de FIRST.</p>
+      <h3>Não confunda</h3>
+      <p><code>closure</code> não consome entrada e não avança o ponto do item que já existe. <code>goto</code> avança todos os itens que têm X logo após o ponto, não apenas um deles; depois aplica closure ao resultado.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>A regra do lookahead</h3>
@@ -666,10 +727,23 @@ inicialize o AFD com estado inicial CC₀
     <div class="eyebrow">Questão 1 · Comparando os métodos</div>
     <h1>Mesmo procedimento, reduções em colunas diferentes</h1>
   </header>
+  <details class="didactic-note" id="q1-metodos-por-extenso" data-didactic-for="q1-metodos">
+    <summary>Por extenso: Quatro maneiras de decidir quando reduzir</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Uma redução diz: “o trecho que reconheci pode ser substituído pelo não terminal da produção”. A diferença central entre os métodos é a precisão da informação usada para autorizar essa substituição.</p>
+      <p>LR(0) autoriza a redução comum em todos os terminais. SLR restringe a FOLLOW do não terminal. LR(1) usa o lookahead daquele item, naquele contexto. LALR compacta estados LR(1) com o mesmo núcleo e reúne seus lookaheads.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Imagine o estado com <code>[A → B C •, a]</code> e <code>[A → B C • f, a]</code>. Com próximo token a, reduza B C a A. Com f, ainda complete a alternativa B C f. LR(1) separa as decisões por coluna; LR(0) também colocaria a redução na coluna f, criando conflito.</p>
+      <h3>Não confunda</h3>
+      <p>Conflito não é “duas ações na linha”: é “duas ações diferentes na mesma célula”. Um estado pode reunir alternativas sem ser ambíguo para o parser.</p>
+      <p>O item aumentado completo é especial: gera aceitação só em eof. Não é uma redução comum ocupando toda a linha. Ao fundir uma coleção LR(1) sem conflitos, LALR pode introduzir reduce/reduce, mas não um novo shift/reduce.</p>
+    </div>
+  </details>
   <div class="tbl-wrap"><table class="t">
     <thead><tr><th>Método</th><th>Autômato</th><th>Redução A → α vai para…</th><th>Observação</th></tr></thead>
     <tbody>
-      <tr><td><b>LR(0)</b></td><td>itens sem lookahead</td><td>todas as colunas de terminais (inclusive eof)</td><td>estado com item completo não pode ter mais nada</td></tr>
+      <tr><td><b>LR(0)</b></td><td>itens sem lookahead</td><td>todas as colunas de terminais (inclusive eof)</td><td>redução comum ocupa todos os terminais; há conflito se disputar uma célula com outra ação. O item aumentado gera acc só em eof</td></tr>
       <tr><td><b>SLR(1)</b></td><td>o mesmo autômato LR(0)</td><td>colunas de FOLLOW(A)</td><td>FOLLOW é global: às vezes inclui tokens impossíveis naquele estado</td></tr>
       <tr><td><b>LR(1)</b></td><td>itens com lookahead</td><td>só a coluna do lookahead do item</td><td>mais estados; o mais poderoso dos quatro</td></tr>
       <tr><td><b>LALR(1)</b></td><td>LR(1) com estados de mesmo núcleo fundidos</td><td>lookaheads unidos na fusão</td><td>mesmo número de estados do LR(0); fusão pode criar reduce/reduce</td></tr>
@@ -704,6 +778,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Cmd → Lhs = Rhs | Rhs: o LR(1) completo do quadro</h1>
     <p class="lede">É a gramática das atribuições com ponteiro (<code>id = **id</code>). A numeração CC₀…CC₁₃ e a tabela coincidem com o caderno, e a aba Pilha refaz os 13 passos do quadro.</p>
   </header>
+  <details class="didactic-note" id="q1-aula-por-extenso" data-didactic-for="q1-aula">
+    <summary>Por extenso: Como o parser reconhece id = **id</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>A gramática distingue um lado esquerdo, <code>Lhs</code>, de uma expressão à direita, <code>Rhs</code>. Aqui <code>* Rhs</code> é a forma de indireção com ponteiro; esse asterisco não representa uma multiplicação entre dois operandos.</p>
+      <p>O autômato não executa uma atribuição. Ele verifica se a sequência de tokens pode ser montada pelas produções. Cada redução reconhece uma peça maior a partir das menores que já estão na pilha.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>No começo de <code>id = * * id</code>, o primeiro id vira Lhs. Ao ver =, o parser continua a alternativa <code>Cmd → Lhs = Rhs</code>, em vez de encerrar o comando como um Rhs.</p>
+      <p>Na parte direita, o último id vira Lhs e depois Rhs. O trecho <code>* Rhs</code> vira Lhs e depois Rhs; o processo se repete para o outro asterisco. Finalmente, <code>Lhs = Rhs</code> vira Cmd e o parser aceita em eof.</p>
+      <h3>Não confunda</h3>
+      <p>Dois estados podem ter os mesmos pontos nas mesmas produções e ainda ser diferentes no LR(1), porque os lookaheads são diferentes. A vista “núcleo” ajuda a enxergar a estrutura, mas não substitui a leitura dos lookaheads.</p>
+    </div>
+  </details>
   <pre class="grammar"><span class="num">r0:</span> Start → Cmd      <span class="num">r1:</span> Cmd → Lhs = Rhs   <span class="num">r2:</span> Cmd → Rhs
 <span class="num">r3:</span> Lhs → * Rhs      <span class="num">r4:</span> Lhs → id         <span class="num">r5:</span> Rhs → Lhs</pre>
   <div data-w="workbench" data-ex="cmd" data-method="lr1" data-tabs="auto,build,table,trace" data-mode="kernel" data-input="id = * * id"></div>
@@ -718,6 +805,18 @@ inicialize o AFD com estado inicial CC₀
     <h1>O conflito que só o lookahead resolve</h1>
     <p class="lede">Troque o método e veja a célula [2, =] mudar.</p>
   </header>
+  <details class="didactic-note" id="q1-aula-metodos-por-extenso" data-didactic-for="q1-aula-metodos">
+    <summary>Por extenso: Por que FOLLOW pode autorizar uma redução indevida</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>FOLLOW reúne os tokens que podem vir depois de um não terminal em algum contexto da gramática. Ele não distingue todos os contextos particulares de cada estado. SLR usa esse conjunto global; LR(1) consegue guardar uma informação mais localizada.</p>
+      <p>No estado que já reconheceu um Lhs no início do comando, = permite continuar uma atribuição. Reduzir esse Lhs a Rhs ali significaria escolher a alternativa de comando formada apenas por um Rhs.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>O SLR encontra = em FOLLOW(Rhs) e põe r5 na coluna =. Mas essa célula já tem s6, da continuação <code>Lhs • = Rhs</code>. No LR(1), o item completo é <code>[Rhs → Lhs •, eof]</code>: r5 fica só em eof e = fica só com s6.</p>
+      <h3>Não confunda</h3>
+      <p>A presença de = em FOLLOW(Rhs) não é erro de cálculo. O problema é usar uma informação global num contexto em que ela é ampla demais. Essa gramática continua sem conflitos após a fusão LALR.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>SLR: conflito em CC₂</h3>
@@ -741,6 +840,18 @@ inicialize o AFD com estado inicial CC₀
     <h1>CN → CN tick tock | tick tock</h1>
     <p class="lede">Gera uma ou mais repetições de “tick tock”. Use os botões de método para responder (a) a (d).</p>
   </header>
+  <details class="didactic-note" id="q1-ex1-por-extenso" data-didactic-for="q1-ex1">
+    <summary>Por extenso: Por que aceitar não é a mesma coisa que reduzir</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>A produção <code>CN → tick tock</code> reconhece o primeiro par. <code>CN → CN tick tock</code> acrescenta mais um par a uma sequência já reconhecida. Portanto, a linguagem tem um ou mais pares completos; não permite um tick isolado nem a sequência vazia.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Depois de reconhecer um CN, há duas possibilidades: terminar o programa ou acrescentar outro par. Em <code>eof</code>, o item <code>Start → CN •</code> autoriza aceitar. Em <code>tick</code>, o item <code>CN → CN • tick tock</code> autoriza deslocar.</p>
+      <p>Para <code>tick tock tick tock</code>, reconheça o primeiro par como CN, leia o segundo e reduza <code>CN tick tock</code> a CN. Depois aceite no fim da entrada.</p>
+      <h3>Não confunda</h3>
+      <p>Não espalhe a aceitação por todas as colunas, nem escreva r0 como redução comum. É justamente por acc ficar em eof e o deslocamento ficar em tick que esses dois itens podem coexistir sem conflito no LR(0).</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>(a) AFD LR(0)</h3>
@@ -764,6 +875,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>A coleção canônica LR(1), um goto de cada vez</h1>
     <p class="lede">Este é o formato da prova: avance os passos e, em cada closure, leia a justificativa de cada lookahead.</p>
   </header>
+  <details class="didactic-note" id="q1-ex2a-por-extenso" data-didactic-for="q1-ex2a">
+    <summary>Por extenso: De onde vêm c, a e f nos itens do exercício</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p><code>S → A a</code> diz que A termina antes de a. Por isso as duas alternativas de A recebem lookahead a. Em ambas, o primeiro símbolo a reconhecer é B e depois vem C; como C começa por c, os itens de B recebem lookahead c.</p>
+      <p>Cada estado novo deve reunir todas as possibilidades que sobrevivem ao mesmo reconhecimento, não uma alternativa isolada escolhida antecipadamente.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Ao reconhecer B, avance tanto <code>A → • B C</code> quanto <code>A → • B C f</code>. Obtenha <code>A → B • C</code> e <code>A → B • C f</code>.</p>
+      <p>Agora abra C duas vezes: na primeira alternativa, C está no fim e herda a; na segunda, C é seguido por f. O item <code>C → • c</code> fica com os contextos a e f. “c” é o token que C reconhece; “a ou f” são os tokens que podem aparecer depois de C.</p>
+      <h3>Não confunda</h3>
+      <p>Não copie mecanicamente o lookahead do pai para todos os filhos. Primeiro calcule o que pode começar a sequência que está depois do não terminal; só acrescente o lookahead do pai quando essa sequência puder desaparecer.</p>
+    </div>
+  </details>
   <pre class="grammar"><span class="num">r0:</span> Start → S    <span class="num">r1:</span> S → A a    <span class="num">r2:</span> A → B C    <span class="num">r3:</span> A → B C f    <span class="num">r4:</span> B → b    <span class="num">r5:</span> C → c</pre>
   <div data-w="workbench" data-ex="ex2" data-method="lr1" data-tabs="build,auto" data-mode="full" data-build-mode="full"></div>
   <div class="note">
@@ -777,6 +901,18 @@ inicialize o AFD com estado inicial CC₀
     <h1>Da coleção para a tabela Ações/Goto</h1>
     <p class="lede">Toque em qualquer célula para ver o item que a gerou. A coluna Start não aparece no Goto: a produção aumentada só serve para aceitar.</p>
   </header>
+  <details class="didactic-note" id="q1-ex2b-por-extenso" data-didactic-for="q1-ex2b">
+    <summary>Por extenso: Lendo uma célula como uma instrução</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Leia <code>Ação[i, a] = r2</code> assim: “se o topo da pilha está no estado i e o próximo token é a, reduza pela produção 2”. Leia <code>s8</code> como “consuma esse token e vá para o estado 8”. Goto é usado com não terminais, depois de uma redução.</p>
+      <p>Uma célula vazia não é uma ação esquecida: quando o parser precisa consultá-la, significa que aquela continuação não é aceita.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>No estado com <code>A → B C •</code> e <code>A → B C • f</code>, o próximo token resolve a dúvida: a encerra A pela produção curta; f continua a produção longa. No LR(1), a recebe r2 e f recebe s8. No SLR, FOLLOW(A) = {a} também basta para separar essas decisões.</p>
+      <h3>Não confunda</h3>
+      <p>No LR(0), r2 também ocuparia f, disputando a mesma célula com s8. É esse par de ações na célula [6, f], e não apenas a presença de dois itens no estado, que demonstra o conflito.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>(c) É LR(1)? Sim.</h3>
@@ -799,6 +935,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Executando o parser com a pilha de pares (símbolo, estado)</h1>
     <p class="lede">A cada passo, consulte Ação[estado do topo, próximo token]. A tabela ao lado acende a célula usada. Experimente também entradas erradas, como <code>b c a a</code>.</p>
   </header>
+  <details class="didactic-note" id="q1-ex2d-por-extenso" data-didactic-for="q1-ex2d">
+    <summary>Por extenso: Reduzir troca um trecho da pilha, não lê um token</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>A pilha guarda o que já foi reconhecido e os estados alcançados. O próximo token só é consumido no deslocamento. Na redução, o parser reorganiza o que já estava na pilha.</p>
+      <p>Se a produção é <code>A → β</code>, retire um par por símbolo de β. O estado que aparecer no topo diz de onde aquele trecho começou. Consulte Goto nesse estado para empilhar A com o estado correto.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Com pilha <code>(⊥,0)(B,3)(C,6)(f,8)</code> e entrada <code>a eof</code>, r3 usa <code>A → B C f</code>. Retire três pares: B, C e f. Resta o estado 0; Goto[0,A] = 2; a pilha passa a <code>(⊥,0)(A,2)</code>.</p>
+      <p>A entrada continua <code>a eof</code>. Só a ação seguinte que deslocar a vai consumir esse token. Assim, vários passos de redução podem acontecer sem a entrada avançar.</p>
+      <h3>Não confunda</h3>
+      <p>Não consulte Goto no estado que acabou de ser retirado. Consulte no topo exposto depois de desempilhar. E conte símbolos da produção, não caracteres do nome: <code>intLit</code>, por exemplo, é um único símbolo.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>Deslocamento</h3>
@@ -822,6 +971,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Braço robótico: projetar uma gramática LR(1)</h1>
     <p class="lede">Válida = em todo prefixo, nº de ↓ ≥ nº de ↑. O saldo final pode ser positivo (sobram maçãs).</p>
   </header>
+  <details class="didactic-note" id="q1-ex3-por-extenso" data-didactic-for="q1-ex3">
+    <summary>Por extenso: O saldo precisa ser válido durante todo o percurso</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Pense em ↓ como colocar uma maçã e ↑ como retirar uma. Começando com zero, nunca se pode retirar o que ainda não foi colocado. Por isso o saldo precisa ser não negativo em todo prefixo, e não apenas no final.</p>
+      <p>B representa um trecho balanceado, que termina com o mesmo saldo com que começou. S permite também descidas que nunca serão compensadas: a sequência pode terminar com maçãs sobrando.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p><code>↓ ↑ ↓</code> tem saldos 1, 0 e 1: é válida. <code>↓ ↑ ↑ ↓</code> termina com saldo zero, mas seus saldos são 1, 0, −1 e 0: é inválida porque a terceira operação tenta retirar uma maçã inexistente.</p>
+      <p>Em <code>S → ↓ B ↑ S</code>, a primeira descida é compensada pela subida mostrada; B descreve o que ocorre de forma balanceada entre elas. Em <code>S → ↓ S</code>, aquela primeira descida permanece sem compensação.</p>
+      <h3>Não confunda</h3>
+      <p>ε significa “não produzir nenhum token”. Reduzir <code>B → ε</code> não consome entrada e não retira pares da pilha. O parser apenas consulta Goto no estado que já estava no topo.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>(a) A gramática</h3>
@@ -852,6 +1014,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Não é LL(1), mas é LR(0) — logo LR(1)</h1>
     <p class="lede">Um parser LL(1) teria de escolher entre A e B ao ver “(”, sem saber quantos “(” virão antes de “)” ou “}”. O LR adia a decisão até o fim.</p>
   </header>
+  <details class="didactic-note" id="q1-ex4-por-extenso" data-didactic-for="q1-ex4">
+    <summary>Por extenso: Reconhecer depois pode ser mais fácil que escolher antes</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Nesta gramática, tanto A quanto B podem começar com (. Um parser LL(1) tentando escolher uma dessas alternativas só pelo próximo token encontra a mesma informação nas duas. O LR pode ler o prefixo comum sem abandonar nenhuma possibilidade.</p>
+      <p>Os itens do estado registram essas possibilidades até que os tokens seguintes as diferenciem. A escolha da redução acontece quando há informação suficiente no trecho reconhecido.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Em <code>( ( a ) )</code>, o a permite reconhecer a alternativa de A; os fechamentos ) completam as camadas de A. Para a alternativa de B, o centro é b e os fechamentos são }.</p>
+      <p>O estado após ( ainda contém as possibilidades de A e B. Isso não é, por si, um conflito: a tabela só terá problema se uma mesma célula pedir duas ações diferentes.</p>
+      <h3>Não confunda</h3>
+      <p>“Não é LL(1)” é uma classificação desta gramática, não uma prova de que a linguagem é impossível de analisar. E LR(0) não significa “não olhar a entrada”: o parser consulta o token; o zero descreve a ausência de lookahead nos itens.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>Gramática aumentada</h3>
@@ -875,6 +1050,18 @@ inicialize o AFD com estado inicial CC₀
     <h1>Digite qualquer gramática e confira autômato e tabela</h1>
     <p class="lede">Resolva no papel primeiro; depois use esta bancada para conferir estados, lookaheads, conflitos e a pilha.</p>
   </header>
+  <details class="didactic-note" id="q1-lab-por-extenso" data-didactic-for="q1-lab">
+    <summary>Por extenso: Como conferir sem depender da numeração dos estados</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Use a bancada como conferência da sua construção. Primeiro identifique o método, a produção aumentada e as produções numeradas. Depois compare os itens e as transições do seu desenho com os do simulador.</p>
+      <p>Os nomes CC₁, CC₂ e assim por diante podem mudar com a ordem de descoberta. O que precisa coincidir é o conteúdo dos estados, os rótulos das setas e as ações correspondentes, após renumerar de forma consistente.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Experimente <code>S -&gt; a S | b</code> com entrada <code>a a b</code>. A cada a, ainda falta reconhecer outro S; o b fornece o caso que encerra a recursão. Compare com <code>a a</code>: ao chegar ao fim, continua faltando o b necessário. Para investigar uma divergência, encontre a primeira célula ou o primeiro item em que as construções se separam.</p>
+      <h3>Não confunda</h3>
+      <p>Um exemplo de entrada aceito não prova que toda a tabela está livre de conflitos. A classificação LR depende da coleção e da tabela completas. Também não resolva um conflito escolhendo arbitrariamente uma ação: isso esconderia a evidência pedida na prova.</p>
+    </div>
+  </details>
   <div data-w="lab"></div>
 </section>
 
@@ -914,6 +1101,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Atributos que sobem e atributos que descem</h1>
     <p class="lede">Uma <b>SDD</b> (definição dirigida por sintaxe) associa atributos aos símbolos e regras às produções. Uma <b>SDT</b> (tradução dirigida por sintaxe) insere trechos de código nas produções. A lista permite misturar as duas.</p>
   </header>
+  <details class="didactic-note" id="q2-sdd-por-extenso" data-didactic-for="q2-sdd">
+    <summary>Por extenso: Anotar a árvore é fazer os nós trocarem informações</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Um atributo é uma informação associada a uma ocorrência de símbolo na árvore. “Sintetizado” significa que o nó calcula algo a partir das informações de seus filhos e entrega o resultado para cima. “Herdado” significa que ele recebe o contexto necessário do pai ou de irmãos, conforme as regras.</p>
+      <p>Em <code>List → List₁ Bit</code>, List é o pai, List₁ é a lista restante à esquerda e Bit é o bit mais à direita. <code>List₁.pos := List.pos + 1</code> manda uma posição maior para a esquerda; <code>List.val := List₁.val + Bit.val</code> reúne os valores calculados pelos filhos.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Para <code>−101</code>, o bit mais à direita ocupa a posição 0 e vale 1 × 2⁰ = 1. O bit do meio ocupa a posição 1 e vale 0. O da esquerda ocupa a posição 2 e vale 1 × 2² = 4.</p>
+      <p>As posições são transmitidas aos nós; os valores 4, 0 e 1 são somados até produzir 5. Sign.neg informa que o sinal é negativo, então Number.val fica −5.</p>
+      <h3>Não confunda</h3>
+      <p>O subscrito em List₁ identifica outra ocorrência de List na produção, não o valor 1. E <code>.pos</code> aqui é a posição que determina uma potência de 2; <code>.val</code> é o valor numérico calculado.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>Sintetizado</h3>
@@ -950,6 +1150,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Construindo a AST nas reduções</h1>
     <p class="lede">O parser ascendente executa a ação de uma produção no momento em que a reduz. Por isso a árvore nasce das folhas para a raiz.</p>
   </header>
+  <details class="didactic-note" id="q2-ex1-por-extenso" data-didactic-for="q2-ex1">
+    <summary>Por extenso: Como as ações de redução montam a AST</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Leia <code>E.node := mkNodePlus(E₁.node, T.node)</code> assim: “crie um nó de soma, ligue nele as árvores que representam os dois operandos e guarde esse novo nó como a representação de E”. Os filhos já estão disponíveis quando essa redução acontece.</p>
+      <p>Já <code>E.node := T.node</code> significa apenas “use a mesma árvore que T já construiu”. Não se cria uma caixinha E a mais na AST.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Para <code>1 − (3 + 2)</code>, primeiro surgem as folhas 1, 3 e 2. Ao reconhecer 3 + 2, crie Plus com as folhas 3 e 2. Os parênteses repassam esse mesmo nó. Por fim, crie Minus com 1 à esquerda e Plus à direita.</p>
+      <p>O resultado é <code>Minus(Int(1), Plus(Int(3), Int(2)))</code>. A soma fica dentro da subtração porque era o agrupamento determinado pelos parênteses.</p>
+      <h3>Não confunda</h3>
+      <p>AST e árvore concreta não são a mesma coisa. A árvore concreta guarda as produções e seus símbolos; a AST preserva as operações relevantes. Os parênteses podem desaparecer como nós sem perder seu efeito sobre o agrupamento.</p>
+    </div>
+  </details>
   <div class="tbl-wrap"><table class="t">
     <thead><tr><th>Produção</th><th>Ação</th></tr></thead>
     <tbody>
@@ -971,6 +1184,19 @@ inicialize o AFD com estado inicial CC₀
     <h1>Interpretador com .str, .type e .val</h1>
     <p class="lede">Três atributos sintetizados por símbolo. A conversão de tipos acontece na operação: se um lado é float, o resultado é float e o outro lado é convertido com <code>cast</code>.</p>
   </header>
+  <details class="didactic-note" id="q2-ex2-por-extenso" data-didactic-for="q2-ex2">
+    <summary>Por extenso: Uma mesma redução produz texto, tipo e valor</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p><code>.str</code> guarda como escrever a expressão; <code>.type</code> guarda a categoria do resultado; <code>.val</code> guarda o resultado numérico. Esses atributos respondem a perguntas diferentes e são calculados juntos a partir dos filhos.</p>
+      <p>Leia <code>cast(E.type, E₁.val)</code> assim: “converta o valor do operando esquerdo para o tipo que foi escolhido para a operação”. Primeiro se decide o tipo; depois se calcula com operandos compatíveis.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Em <code>3.5 + 2</code>, um operando é float e o outro é int. A soma é float: converta 2 para 2.0 e obtenha 5.5. Em <code>1 − (3.5 + 2)</code>, a expressão interna é float, então a subtração também é float e vale −4.5.</p>
+      <p>A string construída é <code>(1 - (3.5 + 2))</code>. A regra de soma já colocou parênteses em torno de 3.5 + 2; a regra <code>T → ( E )</code> repassa essa string para não repetir os parênteses na saída pedida.</p>
+      <h3>Não confunda</h3>
+      <p>Essa promoção int/float pertence ao interpretador deste exercício. Não a aplique automaticamente às regras de aritmética de COOL, que, no slide de referência, exigem dois Int. Tipo não é sinônimo de valor: −4.5 é valor; float é tipo.</p>
+    </div>
+  </details>
   <div class="cols">
 <pre class="code">Start → E { println(E.str + " = " + E.val) }
 
@@ -1000,6 +1226,19 @@ T → floatLit { igual, com float }</pre>
     <h1>Resolver a ambiguidade de a(i) na análise semântica</h1>
     <p class="lede">Em Fortran 77, <code>a(i)</code> pode ser chamada de função ou acesso a array. Em vez de o léxico consultar o sintático (como no typedef de C), o parser aceita a forma única e a análise semântica decide.</p>
   </header>
+  <details class="didactic-note" id="q2-ex3-por-extenso" data-didactic-for="q2-ex3">
+    <summary>Por extenso: A sintaxe reconhece a forma; a declaração dá o significado</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>O texto <code>a(i)</code> tem a mesma forma visual em dois usos possíveis. Só a pontuação não informa se a é uma função ou um array. O parser pode construir um nó genérico com o nome a e a lista de expressões entre parênteses.</p>
+      <p>A análise semântica consulta a declaração de a. Se a for função, verifica os parâmetros e usa o tipo de retorno. Se for array, verifica as dimensões e os índices e usa o tipo do elemento.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Se a foi declarada como função que recebe Int e devolve Float, <code>a(2)</code> é uma chamada de tipo Float. Se a foi declarada como array unidimensional de Int, a mesma forma <code>a(2)</code> é um acesso a elemento de tipo Int.</p>
+      <p>Se a for um inteiro escalar, os parênteses não o transformam em função ou array: há erro semântico. Se a não estiver declarada, registre esse erro em vez de adivinhar seu papel.</p>
+      <h3>Não confunda</h3>
+      <p>Reconhecer uma sequência pela gramática não garante que ela tenha significado válido. Neste exercício, a solução é adiar a decisão para a tabela de símbolos, não inventar uma regra sintática diferente para cada declaração possível.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>Como fazer</h3>
@@ -1027,6 +1266,19 @@ T → floatLit { igual, com float }</pre>
     <h1>9 + 5 * 2 ⇒ “9 5 2 * +” e “+ 9 * 5 2”</h1>
     <p class="lede">Dois atributos sintetizados de string. A única diferença é onde o operador entra na concatenação: no fim (pós-fixa) ou no começo (prefixa).</p>
   </header>
+  <details class="didactic-note" id="q2-ex4-por-extenso" data-didactic-for="q2-ex4">
+    <summary>Por extenso: Trocar a ordem do operador sem trocar a árvore</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Na pós-fixa, cada operação escreve primeiro seus dois operandos e só depois o operador. Na prefixa, escreve primeiro o operador e depois os dois operandos. O agrupamento da expressão continua o mesmo.</p>
+      <p>Leia <code>E.pos := fmt(&quot;%s %s +&quot;, E₁.pos, T.pos)</code> como “junte a tradução pós-fixa do lado esquerdo, a do lado direito e, no fim, o sinal de soma”. Os espaços separam os tokens.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Em <code>9 + 5 * 2</code>, a multiplicação é uma subexpressão: sua pós-fixa é <code>5 2 *</code> e sua prefixa é <code>* 5 2</code>. Trate cada uma como um bloco ao montar a soma.</p>
+      <p>A pós-fixa completa fica <code>9 5 2 * +</code>. A prefixa completa fica <code>+ 9 * 5 2</code>. Não é só mover todos os sinais para o início ou para o fim: a ordem vem da estrutura da árvore.</p>
+      <h3>Não confunda</h3>
+      <p>Aqui <code>.pos</code> é a string pós-fixa, não a posição do bit usada no exercício binário. E a árvore pedida neste item é concreta: E, T e F continuam aparecendo, mesmo nas produções que apenas repassam os atributos.</p>
+    </div>
+  </details>
   <div class="tbl-wrap"><table class="t">
     <thead><tr><th>Produção</th><th>Pós-fixa</th><th>Prefixa</th></tr></thead>
     <tbody>
@@ -1046,6 +1298,19 @@ T → floatLit { igual, com float }</pre>
     <div class="eyebrow">Questão 2 · Lista 2 · Exercício 4 (c)</div>
     <h1>Traduzir só com print(…), sem atributos: dá em um passe?</h1>
   </header>
+  <details class="didactic-note" id="q2-ex4c-por-extenso" data-didactic-for="q2-ex4c">
+    <summary>Por extenso: Por que imprimir cedo demais pode ser irreversível</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Uma chamada de print envia texto para a saída; depois não dá para inserir um operador antes do que já foi impresso. Na pós-fixa, isso combina com as reduções: quando uma operação é reconhecida, seus operandos já foram impressos e o operador pode sair por último.</p>
+      <p>Na prefixa, o operador precisa sair antes dos operandos. Com essas restrições — um passe, impressão imediata e sem guardar a expressão — falta informação no momento em que os primeiros operandos são lidos.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Ao começar pelo token 9, a entrada ainda pode ser apenas <code>9</code>, ou <code>9 * 5</code>, ou <code>9 + 5 * 2</code>. As saídas prefixas começariam respectivamente por 9, * ou +. Imprimir 9 imediatamente já impediria as duas últimas saídas corretas.</p>
+      <p>Guardando uma árvore, o problema desaparece: depois de montá-la, visite primeiro a raiz, depois o filho esquerdo e depois o direito. A raiz + é impressa antes de 9 e da subárvore de multiplicação.</p>
+      <h3>Não confunda</h3>
+      <p>Não conclua que gerar prefixa é impossível. A impossibilidade discutida é a da estratégia restrita de impressão imediata sem armazenamento. Usar <code>.pre</code> ou guardar a AST muda essas condições e resolve o problema.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>Pós-fixa: sim</h3>
@@ -1078,6 +1343,19 @@ F → intLit { print(intLit.lexeme) }</pre>
     <h1>Um nó Let com quatro filhos</h1>
     <p class="lede">Em vez de lets aninhados (um por declaração), o let “horizontal” vira um nó só: três declarações e a expressão final.</p>
   </header>
+  <details class="didactic-note" id="q2-escopo-por-extenso" data-didactic-for="q2-escopo">
+    <summary>Por extenso: O nome local não existe antes da própria declaração</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>O let horizontal reúne várias declarações num nó da árvore, mas elas não passam a valer todas ao mesmo tempo. Cada inicializador é analisado com as declarações anteriores; só depois a nova variável fica disponível.</p>
+      <p>Um nome já existente no escopo externo pode ser usado no inicializador. Portanto, “a nova variável ainda não existe” não significa que qualquer uso desse nome seja sempre inválido: pode haver uma declaração externa visível.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Em <code>x : Int &lt;- z</code>, o z local ainda não foi introduzido. A busca encontra o atributo z : String, que não combina com o Int declarado para x.</p>
+      <p>No inicializador de y, há um let interno: depois de analisar 5, seu y interno vale no corpo <code>y + w</code>. Esse y não é o y externo em declaração. Ao sair do let interno, volta-se ao escopo externo. Mais tarde, z : Int passa a esconder o atributo z : String no corpo final.</p>
+      <h3>Não confunda</h3>
+      <p>O formato horizontal da AST não altera a ordem de visibilidade. Um único nó com vários filhos não significa declarações simultâneas. O escopo é determinado pelo texto e pelas regras da linguagem, não pela ordem das chamadas durante uma execução.</p>
+    </div>
+  </details>
   <div class="cols">
     <div>
 <pre class="code"><span class="kw">class</span> Main <span class="kw">inherits</span> IO {
@@ -1110,6 +1388,19 @@ F → intLit { print(intLit.lexeme) }</pre>
     <h1>Percorrendo a AST com uma pilha espaguete de tabelas</h1>
     <p class="lede">Cada escopo é uma tabela com ponteiro para a anterior. O caminho de qualquer tabela até a raiz é uma pilha. lookup sobe por esse caminho; achou ⇒ grava <code>use</code> no nó; não achou ⇒ reporta e continua.</p>
   </header>
+  <details class="didactic-note" id="q2-ex6-por-extenso" data-didactic-for="q2-ex6">
+    <summary>Por extenso: Como seguir a trilha das tabelas de símbolos</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Imagine cada tabela como uma folha com as declarações de um escopo e uma seta para a folha do escopo externo. Ao procurar um nome, examine a folha atual; se ele não estiver ali, siga a seta. A primeira declaração encontrada é a que vale.</p>
+      <p>Ao entrar num let, crie seu escopo. Para cada declaração, visite primeiro o inicializador e só depois insira a entrada. Ao sair, volte para a tabela externa; as entradas ainda referenciadas pela AST continuam existindo.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Quando o simulador visita o z usado para inicializar x, ainda não existe z local. A busca sobe até a tabela da classe e grava no nó um ponteiro <code>use</code> para o atributo z : String.</p>
+      <p>Ao visitar y dentro do let interno, encontra o y interno logo no escopo mais próximo. Ao visitar w, não encontra declaração em nenhuma tabela do caminho e registra erro. A busca não visita escopos irmãos nem declarações que serão inseridas no futuro.</p>
+      <h3>Não confunda</h3>
+      <p>“Pilha espaguete” descreve o encadeamento persistente de escopos, não uma lista única em que todos os nomes ficam visíveis. Sair do escopo muda a tabela ativa; apagar uma entrada que ainda é alvo de use deixaria a AST com uma referência inválida.</p>
+    </div>
+  </details>
   <div data-w="scopeWalk"></div>
 </section>
 
@@ -1169,6 +1460,19 @@ F → intLit { print(intLit.lexeme) }</pre>
     <h1>Como ler uma regra de inferência</h1>
     <p class="lede">Premissas em cima, conclusão embaixo: se tudo acima da linha vale, vale o que está abaixo. É a mesma forma de “p → q, q → r ∴ p → r”.</p>
   </header>
+  <details class="didactic-note" id="q3-notacao-por-extenso" data-didactic-for="q3-notacao">
+    <summary>Por extenso: Lendo os símbolos como uma frase inteira</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Leia <code>O, M, C ⊢ e : T</code> assim: “usando o ambiente das variáveis O, as assinaturas dos métodos M e a classe atual C, podemos demonstrar que a expressão e tem tipo T”. O é uma letra, não o algarismo zero; os ambientes não estão sendo multiplicados.</p>
+      <p>Na regra Var: “se a consulta O(x) informa o tipo T para x, então x tem tipo T nesse contexto”. A parte de cima é o que preciso verificar; a parte de baixo é o que posso concluir se as verificações derem certo.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Se <code>O(x) = Int</code>, a conclusão é <code>x : Int</code>. Leia a segunda regra como: “se e₁ é inteiro e e₂ é de ponto flutuante, então a soma tem tipo de ponto flutuante”, segundo a regra ilustrada.</p>
+      <p>Em <code>O[Int/x]</code>, leia “o ambiente O, agora com x associado a Int”. Essa operação descreve informação de tipos; não atribui o valor Int a uma variável durante a execução.</p>
+      <h3>Não confunda</h3>
+      <p>O sinal <code>:</code> significa “tem tipo”, não “recebe valor”. E a soma Int/Float deste exemplo ilustra a notação: não substitui a regra específica de aritmética de COOL, que exige dois operandos Int no slide de referência.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>Os ambientes de COOL</h3>
@@ -1195,6 +1499,20 @@ F → intLit { print(intLit.lexeme) }</pre>
     <div class="eyebrow">Questão 3 · Subtipagem</div>
     <h1>A ≤ B é uma ordem parcial; A ⊔ B é o menor tipo acima dos dois</h1>
   </header>
+  <details class="didactic-note" id="q3-subtipo-por-extenso" data-didactic-for="q3-subtipo">
+    <summary>Por extenso: O if precisa de um tipo que sirva para qualquer ramo</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Leia <code>B ≤ A</code> como “B é subtipo de A: um objeto de B pode ser usado onde se espera A”. A direção não se inverte automaticamente. Duas classes podem não ser subtipos uma da outra; por isso a ordem é parcial.</p>
+      <p>Leia <code>D ⊔ C</code> como “o tipo mais específico que aceita tanto D quanto C”. Na árvore de herança simples mostrada, suba a partir dos dois tipos e encontre o primeiro ancestral comum.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>D sobe para B, depois A e Object. C sobe para A e Object. O ancestral comum mais próximo é A, então <code>D ⊔ C = A</code>.</p>
+      <p>Leia <code>if e₀ then (e₁ : D) else (e₂ : C) fi : A</code> assim: “se a condição e₀ for verdadeira, o resultado vem de e₁ e tem tipo D; caso contrário, vem de e₂ e tem tipo C. Como ambos cabem em A, o if inteiro recebe o tipo estático A”. A condição precisa ser Bool.</p>
+      <h3>Não confunda</h3>
+      <p>O resultado não precisa ser Bool só porque a condição é Bool. A é o tipo garantido estaticamente; em execução, o objeto produzido continua sendo o do ramo escolhido, sem ser transformado num objeto de classe A.</p>
+      <p>Object também aceitaria os dois ramos, mas não é a melhor resposta quando A é um ancestral comum mais específico. Se um tipo já é subtipo do outro, como D ≤ B, então <code>D ⊔ B = B</code>.</p>
+    </div>
+  </details>
   <div class="cols">
     <div class="card">
       <h3>≤ (do quadro)</h3>
@@ -1290,6 +1608,19 @@ F → intLit { print(intLit.lexeme) }</pre>
     <h1>A regra do let horizontal, com os índices certos</h1>
     <p class="lede">Cada inicializador é tipado no ambiente produzido pelas declarações anteriores; depois o ambiente ganha a nova variável com o tipo <b>declarado</b>.</p>
   </header>
+  <details class="didactic-note" id="q3-letn-por-extenso" data-didactic-for="q3-letn">
+    <summary>Por extenso: Um ambiente antes e outro depois de cada declaração</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Leia <code>Oᵢ ⊢ eᵢ : Tᵢ′</code> como “antes de inserir a variável i, analise seu inicializador e descubra o tipo que ele realmente tem”. Leia <code>Tᵢ′ ≤ Tᵢ</code> como “esse tipo encontrado precisa caber no tipo declarado”. O apóstrofo distingue encontrado de declarado; não é uma derivada.</p>
+      <p>Só depois forme <code>Oᵢ₊₁ = Oᵢ[Tᵢ/xᵢ]</code>: acrescente a variável com o tipo declarado. Ao fim das n declarações, o corpo é analisado em Oₙ₊₁, onde todas elas já estão disponíveis.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Em <code>let x : A &lt;- new B, y : A &lt;- x in y</code>, suponha B ≤ A. Primeiro, new B tem tipo B e B cabe em A. Insira x : A. Depois, o inicializador de y é x, cujo tipo estático é A; insira y : A. O corpo y tem tipo A, então o let inteiro tem tipo A.</p>
+      <p>Observe a ordem: o tipo de x no ambiente é A, não B. E o inicializador da nova variável não a enxerga, embora possa enxergar uma declaração externa com o mesmo nome.</p>
+      <h3>Não confunda</h3>
+      <p>O tipo final do let vem do corpo após in, não necessariamente do último inicializador. Na recuperação de erros adotada pelo exercício, uma incompatibilidade é reportada, mas a declaração ainda é inserida com seu tipo declarado para permitir a análise do restante.</p>
+    </div>
+  </details>
   <div class="panel">
     <p class="mono">O₁ = O  ·  O<sub>i+1</sub> = Oᵢ[Tᵢ/xᵢ]  para 1 ≤ i ≤ n</p>
     <div data-w="rule" data-prem="Oᵢ,M,C ⊢ eᵢ : Tᵢ′    Tᵢ′ ≤ Tᵢ    (1 ≤ i ≤ n)||O<sub>n+1</sub>,M,C ⊢ e<sub>n+1</sub> : T<sub>n+1</sub>" data-conc="O,M,C ⊢ let x₁ : T₁ &lt;- e₁, …, xₙ : Tₙ &lt;- eₙ in e<sub>n+1</sub> : T<sub>n+1</sub>" data-name="Let-n"></div>
@@ -1323,6 +1654,19 @@ F → intLit { print(intLit.lexeme) }</pre>
     <h1>Preenchendo as incógnitas T₁′, T₂′, T₃′, T₄</h1>
     <p class="lede">Ambiente inicial: O tem z : String (o atributo); M tem out_string herdado de IO. Avance e veja a regra se completar e os erros aparecerem sem interromper a análise.</p>
   </header>
+  <details class="didactic-note" id="q3-erros-por-extenso" data-didactic-for="q3-erros">
+    <summary>Por extenso: Três erros independentes, sem multiplicar mensagens em cascata</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>O objetivo do passo a passo é descobrir os tipos e registrar problemas sem parar no primeiro. O compilador continua a análise com as convenções de recuperação do exercício; isso não torna o programa válido.</p>
+      <p>NoType marca um resultado cujo tipo não pôde ser obtido por causa de um erro anterior. No exemplo, ele é propagado pela soma com w e aceito na comparação de compatibilidade para evitar mensagens redundantes.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Primeiro: o z que inicializa x é o atributo String. <code>String ≤ Int</code> falha, mas x entra no ambiente como Int. Segundo: w não foi declarado; <code>y + w</code> e o let interno recebem NoType. Não se repete esse mesmo problema como outro erro de inicialização de y.</p>
+      <p>Depois, z local recebe Int. No corpo, x, y e z têm os tipos declarados Int, então a soma tem tipo Int. Terceiro: out_string espera String, não Int. As incógnitas ficam <code>T₁′ = String</code>, <code>T₂′ = NoType</code>, <code>T₃′ = Int</code>; o retorno declarado conhecido permite conservar <code>T₄ = SELF_TYPE_Main</code> durante a recuperação.</p>
+      <h3>Não confunda</h3>
+      <p>“Consegui anotar um tipo depois de recuperar o erro” não significa “todas as premissas foram satisfeitas”. A chamada continua errada pelo argumento. NoType e a conservação do retorno conhecido são estratégias deste exercício, não permissões normais para executar um programa mal tipado.</p>
+    </div>
+  </details>
   <div data-w="typeErr"></div>
 </section>
 
@@ -1332,6 +1676,19 @@ F → intLit { print(intLit.lexeme) }</pre>
     <h1>O exemplo sem erros, premissa por premissa</h1>
     <p class="lede"><code>let x : Int &lt;- 10, y : Int &lt;- (let y : Int &lt;- 5 in y + 5), z : Int &lt;- 10 in out_int(x + y + z)</code>. A mesma regra, agora com todas as premissas satisfeitas; o tipo final vem da assinatura de out_int.</p>
   </header>
+  <details class="didactic-note" id="q3-ok-por-extenso" data-didactic-for="q3-ok">
+    <summary>Por extenso: O tipo da chamada não é o tipo do que ela imprime</summary>
+    <div class="didactic-body">
+      <h3>Em palavras</h3>
+      <p>Os três inicializadores são compatíveis com Int. No let interno, o y local vale no corpo <code>y + 5</code>; essa soma é Int e fornece um inicializador válido para o y externo. No corpo final, x + y + z também é Int.</p>
+      <p>A assinatura <code>out_int(Int) : SELF_TYPE</code> diz duas coisas diferentes: o argumento esperado é Int; o resultado devolvido pela chamada é self. O tipo do argumento não determina sozinho o tipo do retorno.</p>
+      <h3>Exemplo, passo a passo</h3>
+      <p>Com os valores deste exemplo, x recebe 10, o y interno recebe 5 e produz 5 + 5 = 10 para o y externo, e z recebe 10. Se executado, o corpo imprime 30.</p>
+      <p>Mas a chamada devolve self. Como o receptor implícito é <code>self : SELF_TYPE_Main</code>, a chamada tem tipo SELF_TYPE_Main. Esse também é o tipo do let completo, e ele é compatível com o retorno Object declarado para main.</p>
+      <h3>Não confunda</h3>
+      <p>Não conclua que o let tem tipo Int porque contém variáveis inteiras ou porque imprime 30. Siga o tipo da expressão depois de in. Aqui essa expressão é uma chamada de método cujo retorno é SELF_TYPE.</p>
+    </div>
+  </details>
   <div data-w="typeOk"></div>
   <div class="note"><p>out_int(x : Int) : SELF_TYPE imprime e devolve self. Chamado em Main sem receptor, o receptor é self : SELF_TYPE_Main, então a chamada — e o let inteiro — tem tipo SELF_TYPE_Main, que é ≤ Object (tipo de retorno de main).</p></div>
 </section>
