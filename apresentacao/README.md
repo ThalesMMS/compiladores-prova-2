@@ -8,6 +8,8 @@ Apresentação interativa para as três questões da prova:
 
 ## Como abrir
 
+Online: <https://thalesmms.github.io/compiladores-prova-2/> (publicado pelo GitHub Pages a cada push na `main`; o repositório continua privado).
+
 Abra `index.html` no navegador. Use ← e → para trocar de slide. Com internet, a página carrega as fontes e a biblioteca de layout de grafos (dagre); sem internet ela funciona com fontes do sistema e um layout de autômato mais simples.
 
 ## Como alterar
