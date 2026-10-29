@@ -6,7 +6,7 @@
   --grid: #e3e9f3;
   --ink: #14223a;
   --ink-2: #4b5b77;
-  --ink-3: #7686a1;
+  --ink-3: #5b6a85;
   --rule: #cdd6e5;
   --marker: #1f4fd6;
   --marker-wash: #e6edfd;
@@ -435,10 +435,11 @@ textarea.gram {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .index {
     position: fixed; z-index: 25; top: calc(var(--top-h) + env(safe-area-inset-top, 0px)); left: 0; bottom: 0; width: min(88vw, 340px); height: auto;
-    transform: translateX(-105%); transition: transform 0.2s ease; box-shadow: var(--shadow);
+    transform: translateX(-105%); transition: transform 0.2s ease, visibility 0.2s; box-shadow: var(--shadow);
+    visibility: hidden; /* fechado: fora da ordem de Tab */
     padding-left: max(10px, env(safe-area-inset-left, 0px));
   }
-  body.index-open .index { transform: none; }
+  body.index-open .index { transform: none; visibility: visible; }
   body.index-open .scrim { display: block; position: fixed; inset: 0; z-index: 24; background: rgba(10, 16, 28, 0.35); }
   .modtabs { display: none; }
   .counter { margin-left: auto; }

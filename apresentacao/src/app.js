@@ -429,15 +429,20 @@ function explainStep(T, step) {
   const top = step.stack[step.stack.length - 1].state;
   const tok = step.input[0].sym;
   const where = `Ação[${esc(LR.stateLabel(C, top))}, ${esc(tok)}]`;
-  if (step.kind === 's') return `<p><b>${where} = s${esc(LR.stateLabel(C, step.target))}</b> → desloca: empilha (<code>${esc(tok)}</code>, ${esc(LR.stateLabel(C, step.target))}) e consome <code>${esc(tok)}</code>.</p>`;
-  if (step.kind === 'acc') return `<p><b>${where} = acc</b> → a entrada foi reconhecida. 🎉</p>`;
+  let conf = '';
+  if (step.conflict) {
+    const [chosen, ...rest] = T.action[top][tok].map((e) => esc(LR.actionText(e, C)));
+    conf = `<p class="err-msg"><b>Conflito:</b> a célula tem ${chosen} / ${rest.join(' / ')}. O simulador seguiu a primeira (${chosen}); ${rest.length > 1 ? 'as outras ficaram' : 'a outra ficou'} de fora (${rest.join(', ')}).</p>`;
+  }
+  if (step.kind === 's') return `<p><b>${where} = s${esc(LR.stateLabel(C, step.target))}</b> → desloca: empilha (<code>${esc(tok)}</code>, ${esc(LR.stateLabel(C, step.target))}) e consome <code>${esc(tok)}</code>.</p>` + conf;
+  if (step.kind === 'acc') return `<p><b>${where} = acc</b> → a entrada foi reconhecida. 🎉</p>` + conf;
   if (step.kind === 'err') return `<p><b>${where} vazia</b> → erro sintático: esta entrada não pertence à linguagem.</p>`;
   const p = step.prod;
   const k = step.popped;
   const popTxt = k === 0 ? 'Produção vazia: desempilha <b>0</b> pares e consulta o goto no próprio topo.' : `Desempilha <b>${k}</b> par${k > 1 ? 'es' : ''} (|lado direito| = ${k}).`;
   return `<p><b>${where} = r${p.idx}</b> → reduz <code>${esc(LR.prodText(G, p))}</code>.</p>
     <p>${popTxt} Topo exposto: estado ${esc(LR.stateLabel(C, step.exposed))}. Goto[${esc(LR.stateLabel(C, step.exposed))}, ${esc(p.lhs)}] = ${esc(LR.stateLabel(C, step.target))} → empilha (${esc(p.lhs)}, ${esc(LR.stateLabel(C, step.target))}).</p>
-    <p class="stepinfo">A redução não consome entrada: quem consome token é o deslocamento.</p>`;
+    <p class="stepinfo">A redução não consome entrada: quem consome token é o deslocamento.</p>` + conf;
 }
 
 function stackViz(T, step) {
@@ -487,6 +492,8 @@ function traceBox(T, inputText, opts = {}) {
     let tb = null;
     if (opts.withTable) { tb = tableBox(T, { prods: true }); right.append(tb.el); }
     body.append(grid, el('div', { class: `note ${res.ok ? 'ok' : 'err'}` }, res.ok ? `Entrada aceita em ${steps.length} passos.` : 'Entrada rejeitada: a pilha chega a uma célula vazia (erro).'));
+    const nConf = steps.filter((s) => s.conflict).length;
+    if (nConf) body.append(el('div', { class: 'note warn' }, `Atenção: ${nConf} passo(s) caíram em célula com conflito; o simulador seguiu a primeira ação da célula, então outra escolha poderia dar outro resultado.`));
     makeStepper(ctrl, steps.length, (k) => {
       const s = steps[k];
       exp.className = `explain k-${s.kind}`;
@@ -768,11 +775,13 @@ W.closureDemo = (h) => {
   const ctrlHost = el('div');
   const pick = seg([[0, 'CC0 (estado inicial)'], [3, 'CC3 = goto(CC0, B)']], which, (v) => { which = v; draw(); });
   h.append(el('div', { class: 'toolbar' }, pick), ctrlHost, box);
+  let stepper = null;
   function draw() {
     const st = C.states[which];
     const items = st.items;
+    if (stepper) stepper.stop();
     ctrlHost.replaceChildren();
-    makeStepper(ctrlHost, items.length, (k) => {
+    stepper = makeStepper(ctrlHost, items.length, (k) => {
       const shown = items.slice(0, k + 1);
       const cur = items[k];
       const ul = el('ul', { class: 'itemlist' });
