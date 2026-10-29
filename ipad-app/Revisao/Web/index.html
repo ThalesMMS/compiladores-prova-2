@@ -376,6 +376,8 @@ textarea.gram {
 .rulecard .prem { flex-direction: column; align-items: center; gap: 2px; }
 .rule .rname { font-family: var(--font-body); font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
 .rulebox { overflow-x: auto; padding: 8px 4px; }
+/* Sem o teto de 100%, uma regra mais larga que o cartão rola para a direita em vez de vazar pelos dois lados. */
+.rulebox .rule { max-width: none; }
 .ruleflip-intro { color: var(--ink-2); font-size: 0.9rem; margin: 0 0 12px; }
 .rulecards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); }
 .rulecard { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
@@ -1796,7 +1798,7 @@ if (typeof module !== 'undefined') module.exports = LR;
 <script>
 /* ===================== utilidades ===================== */
 const $ = (sel, root = document) => root.querySelector(sel);
-const $ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SVGNS = 'http://www.w3.org/2000/svg';
 let uid = 0;
@@ -2199,16 +2201,16 @@ function tableBox(T, opts = {}) {
   wrap.append(legend, tw, conf, why);
   let selKey = null;
   function select(s, sym, silent) {
-    $('.sel', table).forEach((x) => x.classList.remove('sel'));
-    $('tr.rowsel', table).forEach((x) => x.classList.remove('rowsel'));
-    $('th.colsel', table).forEach((x) => x.classList.remove('colsel'));
+    $$('.sel', table).forEach((x) => x.classList.remove('sel'));
+    $$('tr.rowsel', table).forEach((x) => x.classList.remove('rowsel'));
+    $$('th.colsel', table).forEach((x) => x.classList.remove('colsel'));
     if (s == null) return;
     selKey = `${s}|${sym}`;
     const td = cells[selKey];
     if (td) td.classList.add('sel');
     const row = $(`tr[data-row="${s}"]`, tbody);
     if (row) row.classList.add('rowsel');
-    const th = $('th[data-col]', thead).find((x) => x.dataset.col === sym);
+    const th = $$('th[data-col]', thead).find((x) => x.dataset.col === sym);
     if (th) th.classList.add('colsel');
     if (!silent) { why.hidden = false; why.innerHTML = `<p class="stepinfo">Célula [${esc(LR.stateLabel(C, s))}, ${esc(sym)}]</p>` + cellWhy(T, s, sym); }
   }
@@ -3092,7 +3094,7 @@ W.rule = (h) => {
 
 /* Cada cartão preserva a regra original na frente e mostra a leitura por extenso atrás. */
 W.ruleFlips = (host) => {
-  $('.rulecard', host).forEach((card) => {
+  $$('.rulecard', host).forEach((card) => {
     const explanation = $('.rule-explanation', card);
     const heading = $('h4', card);
     if (!explanation || !heading) return;
@@ -3239,7 +3241,7 @@ W.typeOk = (h) => typeStepper(h, { ...LET_OK, envs: ENVS_OK });
 
 /* ===================== navegação entre slides ===================== */
 function initDeck() {
-  const slides = $('.slide');
+  const slides = $$('.slide');
   const index = $('#index');
   const counter = $('#counter');
   const progress = $('#progress');
@@ -3269,16 +3271,16 @@ function initDeck() {
     const s = slides[i];
     if (!mounted.has(s.id)) {
       mounted.add(s.id);
-      $('[data-w]', s).forEach((hst) => {
+      $$('[data-w]', s).forEach((hst) => {
         try { W[hst.dataset.w](hst); } catch (e) { console.error(e); hst.append(el('p', { class: 'err-msg' }, 'Erro ao montar este exemplo: ' + e.message)); }
       });
     }
-    $('#index a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + s.id ? 'page' : 'false'));
+    $$('#index a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + s.id ? 'page' : 'false'));
     const cur = $('#index a[aria-current="page"]');
     if (cur) cur.scrollIntoView({ block: 'nearest' });
     counter.textContent = `${i + 1} / ${slides.length}`;
     progress.style.width = `${((i + 1) / slides.length) * 100}%`;
-    $('.modtab').forEach((b) => b.setAttribute('aria-current', String(b.dataset.mod === s.dataset.mod)));
+    $$('.modtab').forEach((b) => b.setAttribute('aria-current', String(b.dataset.mod === s.dataset.mod)));
     const p = slides[i - 1];
     const n = slides[i + 1];
     prevA.hidden = !p;
@@ -3304,7 +3306,7 @@ function initDeck() {
   $('#mnext').onclick = () => go(1);
   $('#menu').onclick = () => document.body.classList.toggle('index-open');
   $('#scrim').onclick = () => document.body.classList.remove('index-open');
-  $('.modtab').forEach((b) => { b.onclick = () => { const s = slides.find((x) => x.dataset.mod === b.dataset.mod); if (s) location.hash = s.id; }; });
+  $$('.modtab').forEach((b) => { b.onclick = () => { const s = slides.find((x) => x.dataset.mod === b.dataset.mod); if (s) location.hash = s.id; }; });
   show(location.hash.slice(1), false);
 }
 document.addEventListener('DOMContentLoaded', initDeck);

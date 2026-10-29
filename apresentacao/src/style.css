@@ -366,6 +366,8 @@ textarea.gram {
 .rulecard .prem { flex-direction: column; align-items: center; gap: 2px; }
 .rule .rname { font-family: var(--font-body); font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
 .rulebox { overflow-x: auto; padding: 8px 4px; }
+/* Sem o teto de 100%, uma regra mais larga que o cartão rola para a direita em vez de vazar pelos dois lados. */
+.rulebox .rule { max-width: none; }
 .ruleflip-intro { color: var(--ink-2); font-size: 0.9rem; margin: 0 0 12px; }
 .rulecards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); }
 .rulecard { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }

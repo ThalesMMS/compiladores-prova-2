@@ -1296,7 +1296,7 @@ W.rule = (h) => {
 
 /* Cada cartão preserva a regra original na frente e mostra a leitura por extenso atrás. */
 W.ruleFlips = (host) => {
-  $('.rulecard', host).forEach((card) => {
+  $$('.rulecard', host).forEach((card) => {
     const explanation = $('.rule-explanation', card);
     const heading = $('h4', card);
     if (!explanation || !heading) return;
