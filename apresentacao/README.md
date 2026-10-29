@@ -24,3 +24,5 @@ Depois de editar, gere o `index.html` de novo:
 ```bash
 python3 apresentacao/build.py
 ```
+
+O mesmo comando atualiza a versão offline do app de iPad (`ipad-app/`, veja o README de lá).

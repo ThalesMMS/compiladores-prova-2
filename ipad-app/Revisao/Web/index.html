@@ -1,0 +1,3209 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Revisão P2 de Compiladores</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Revisão interativa para a P2 de Compiladores: análise LR, tradução dirigida por sintaxe, escopo e inferência de tipos.">
+<link rel="stylesheet" href="vendor/fonts.css">
+<style>
+/* Layout: lousa quadriculada — índice lateral + palco com um slide por vez; tinta azul-marinho, pincel azul como acento,
+   a régua dupla vermelha do caderno sob cada título; cores fixas por tipo de ação do parser. */
+:root {
+  --paper: #f5f8fc;
+  --sheet: #ffffff;
+  --grid: #e3e9f3;
+  --ink: #14223a;
+  --ink-2: #4b5b77;
+  --ink-3: #5b6a85;
+  --rule: #cdd6e5;
+  --marker: #1f4fd6;
+  --marker-wash: #e6edfd;
+  --margin-red: #d9534f;
+  --shift: #1f4fd6;
+  --shift-wash: #e6edfd;
+  --reduce: #a85a06;
+  --reduce-wash: #fbefdc;
+  --goto: #6a3fcf;
+  --goto-wash: #efe9fc;
+  --accept: #157046;
+  --accept-wash: #def3e8;
+  --conflict: #c0262d;
+  --conflict-wash: #fde5e5;
+  --hl: #fff2b3;
+  --shadow: 0 1px 2px rgba(20, 34, 58, 0.06), 0 4px 14px rgba(20, 34, 58, 0.06);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;
+  --radius: 10px;
+  --index-w: 290px;
+  --top-h: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1520; --sheet: #141e2e; --grid: #1a2638; --ink: #e4ebf6; --ink-2: #a3b3cc; --ink-3: #7486a3;
+    --rule: #2a3a54; --marker: #82a6ff; --marker-wash: #1b2a4a; --margin-red: #e46b67;
+    --shift: #82a6ff; --shift-wash: #1b2a4a; --reduce: #f2a650; --reduce-wash: #3a2a14; --goto: #b9a0ff; --goto-wash: #2a2148;
+    --accept: #4fd18f; --accept-wash: #133325; --conflict: #ff6f6f; --conflict-wash: #3d1a1d; --hl: #4a4115;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1520; --sheet: #141e2e; --grid: #1a2638; --ink: #e4ebf6; --ink-2: #a3b3cc; --ink-3: #7486a3;
+  --rule: #2a3a54; --marker: #82a6ff; --marker-wash: #1b2a4a; --margin-red: #e46b67;
+  --shift: #82a6ff; --shift-wash: #1b2a4a; --reduce: #f2a650; --reduce-wash: #3a2a14; --goto: #b9a0ff; --goto-wash: #2a2148;
+  --accept: #4fd18f; --accept-wash: #133325; --conflict: #ff6f6f; --conflict-wash: #3d1a1d; --hl: #4a4115;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--sheet);
+}
+a { color: var(--marker); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px; }
+code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+kbd { border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 0.35em; background: var(--sheet); }
+.u { text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- barra superior ---------- */
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  display: flex; align-items: center; gap: 12px;
+  min-height: var(--top-h);
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
+}
+.brand { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.brand b { font-family: var(--font-display); font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap; }
+.brand span { font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
+.modtabs { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.modtab {
+  border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 4px 12px; cursor: pointer;
+  font-size: 0.85rem; color: var(--ink-2); white-space: nowrap;
+}
+.modtab b { color: var(--ink); font-family: var(--font-display); }
+.modtab[aria-current="true"] { background: var(--marker-wash); border-color: var(--marker); color: var(--ink); }
+.counter { font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--ink-2); white-space: nowrap; }
+.iconbtn {
+  white-space: nowrap; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--rule); background: var(--sheet); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 0.85rem;
+}
+.iconbtn:hover { border-color: var(--marker); }
+.progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: transparent; }
+.progress i { display: block; height: 100%; background: var(--marker); transition: width 0.25s ease; }
+
+/* ---------- estrutura ---------- */
+.shell { display: grid; grid-template-columns: var(--index-w) minmax(0, 1fr); min-height: calc(100% - var(--top-h)); }
+.index {
+  position: sticky; top: calc(var(--top-h) + env(safe-area-inset-top, 0px)); align-self: start;
+  height: calc(100vh - var(--top-h) - env(safe-area-inset-top, 0px)); overflow-y: auto;
+  border-right: 1px solid var(--rule); background: var(--sheet);
+  padding-block: 12px 40px; padding-inline: 10px;
+}
+.index h3 {
+  margin: 14px 8px 4px; font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); font-family: var(--font-body);
+}
+.index h3 b { color: var(--marker); }
+.index ol { list-style: none; margin: 0; padding: 0; }
+.index a {
+  display: grid; grid-template-columns: 2.1em 1fr; gap: 4px; padding: 5px 8px; border-radius: 7px;
+  color: var(--ink-2); text-decoration: none; font-size: 0.9rem; line-height: 1.3;
+}
+.index a .n { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 0.8rem; padding-top: 1px; }
+.index a:hover { background: var(--paper); color: var(--ink); }
+.index a[aria-current="page"] { background: var(--marker-wash); color: var(--ink); font-weight: 700; }
+.index a .star { color: var(--margin-red); font-weight: 700; margin-left: 4px; }
+
+.stage {
+  min-width: 0;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  padding-block: 28px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.slide { max-width: 1180px; margin: 0 auto; }
+.slide[hidden] { display: none !important; }
+.slide > header { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 4px double var(--margin-red); }
+.eyebrow { font-size: 0.75rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--marker); font-weight: 700; }
+.slide h1 {
+  font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12;
+  font-size: clamp(1.55rem, 1.1rem + 1.6vw, 2.25rem); margin: 4px 0 6px; text-wrap: balance;
+}
+.slide h2 { font-family: var(--font-display); font-size: 1.22rem; letter-spacing: -0.01em; margin: 26px 0 8px; text-wrap: balance; }
+.slide h3 { font-size: 1rem; margin: 18px 0 6px; }
+.lede { color: var(--ink-2); font-size: 1.05rem; max-width: 70ch; margin: 0; }
+.slide p, .slide li { max-width: 74ch; }
+.slide ul, .slide ol { padding-left: 1.3em; }
+.slide li + li { margin-top: 4px; }
+
+.cols { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.cols > * { min-width: 0; }
+.cols-2-1 { display: grid; gap: 18px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
+.cols-even { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 900px) { .cols-2-1, .cols-even { grid-template-columns: minmax(0, 1fr); } }
+
+.card {
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.card h3 { margin-top: 0; font-family: var(--font-display); font-size: 1.05rem; }
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 14px; min-width: 0; }
+
+.note {
+  border-left: 3px solid var(--marker); background: var(--marker-wash); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 80ch;
+}
+.note.warn { border-left-color: var(--reduce); background: var(--reduce-wash); }
+.note.err { border-left-color: var(--conflict); background: var(--conflict-wash); }
+.note.ok { border-left-color: var(--accept); background: var(--accept-wash); }
+.note > :first-child { margin-top: 0; }
+.note > :last-child { margin-bottom: 0; }
+.hand { font-family: var(--font-hand); font-size: 1.35rem; line-height: 1.1; color: var(--marker); }
+
+.tag {
+  display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; vertical-align: middle;
+}
+.tag.q1 { color: var(--shift); } .tag.q2 { color: var(--reduce); } .tag.q3 { color: var(--goto); }
+.tag.key { color: var(--margin-red); }
+
+pre.code, .grammar {
+  font-family: var(--font-mono); font-size: 0.86rem; line-height: 1.55; background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 10px 14px; overflow-x: auto; margin: 10px 0; white-space: pre;
+}
+.grammar .num { color: var(--ink-3); }
+.kw { color: var(--goto); }
+.cm { color: var(--ink-3); font-style: italic; }
+
+/* tabelas de texto */
+.tbl-wrap { overflow-x: auto; margin: 10px 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+table.t { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+table.t th, table.t td { padding: 6px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+table.t th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); background: var(--paper); }
+table.t tr:last-child td { border-bottom: 0; }
+table.t td.mono, table.t td code { white-space: nowrap; }
+
+/* ---------- tabela LR ---------- */
+.lrtable { border-collapse: separate; border-spacing: 0; font-family: var(--font-mono); font-size: 0.84rem; font-variant-numeric: tabular-nums; }
+.lrtable th, .lrtable td { padding: 5px 9px; text-align: center; border-bottom: 1px solid var(--rule); border-right: 1px solid var(--grid); min-width: 3.1em; }
+.lrtable thead th { background: var(--paper); color: var(--ink-2); font-weight: 600; position: sticky; top: 0; }
+.lrtable thead tr:first-child th { font-family: var(--font-body); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.lrtable th.st, .lrtable td.st { text-align: left; color: var(--ink-2); background: var(--paper); position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
+.lrtable .div { border-left: 2px solid var(--rule); }
+.lrtable td.c { cursor: pointer; }
+.lrtable td.c:hover { outline: 2px solid var(--marker); outline-offset: -2px; }
+.lrtable td.empty { color: var(--rule); }
+.lrtable .a-s { color: var(--shift); font-weight: 600; }
+.lrtable .a-r { color: var(--reduce); font-weight: 600; }
+.lrtable .a-g { color: var(--goto); }
+.lrtable .a-acc { color: var(--accept); font-weight: 700; }
+.lrtable td.conf { background: var(--conflict-wash); color: var(--conflict); font-weight: 700; }
+.lrtable td.sel { background: var(--hl) !important; }
+.lrtable tr.rowsel td { background: var(--marker-wash); }
+.lrtable tr.rowsel td.st { background: var(--marker-wash); color: var(--ink); font-weight: 700; }
+.lrtable th.colsel { background: var(--marker-wash); color: var(--ink); }
+.why { margin-top: 10px; font-size: 0.92rem; }
+.why .item { font-family: var(--font-mono); font-size: 0.85rem; background: var(--paper); padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; color: var(--ink-2); margin: 6px 0; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: currentColor; }
+.legend .l-s { color: var(--shift); } .legend .l-r { color: var(--reduce); } .legend .l-g { color: var(--goto); }
+.legend .l-acc { color: var(--accept); } .legend .l-c { color: var(--conflict); }
+
+/* ---------- controles ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 0.9rem; line-height: 1.2;
+}
+.btn:hover { border-color: var(--marker); }
+.btn.primary { background: var(--marker); border-color: var(--marker); color: var(--sheet); font-weight: 700; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--sheet); flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; font-size: 0.88rem; border-right: 1px solid var(--rule); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--marker-wash); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--marker); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 12px; overflow-x: auto; }
+.tabs button {
+  border: 0; background: transparent; padding: 8px 12px; cursor: pointer; font-size: 0.92rem; color: var(--ink-2);
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--marker); font-weight: 700; }
+.field { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.field label { font-size: 0.85rem; color: var(--ink-2); }
+.field input[type="text"] {
+  border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; background: var(--sheet); min-width: 0; flex: 1 1 200px;
+  font-family: var(--font-mono); font-size: 0.9rem;
+}
+textarea.gram {
+  width: 100%; min-height: 150px; border: 1px solid var(--rule); border-radius: 8px; padding: 10px; background: var(--sheet);
+  font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; resize: vertical;
+}
+.stepinfo { font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--ink-2); }
+.err-msg { color: var(--conflict); font-size: 0.9rem; }
+
+/* ---------- diagramas ---------- */
+.diagram { overflow: auto; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); position: relative; max-height: 78vh; }
+.diagram svg { display: block; }
+.diagram.fit svg { width: 100%; height: auto; }
+.dg-node rect, .dg-node ellipse { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.2; }
+.dg-node .hd { fill: var(--paper); stroke: none; }
+.dg-node text { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; }
+.dg-node text.title { font-weight: 700; font-family: var(--font-body); font-size: 13px; }
+.dg-node text.closure { fill: var(--ink-2); }
+.dg-node text.complete { fill: var(--reduce); font-weight: 600; }
+.dg-node text.accept { fill: var(--accept); font-weight: 700; }
+.dg-node line.sep { stroke: var(--rule); stroke-dasharray: 3 3; }
+.dg-node.click { cursor: pointer; }
+.dg-node.click:hover rect.box { stroke: var(--marker); }
+.dg-node.sel rect.box { stroke: var(--marker); stroke-width: 2.5; }
+.dg-node.cur rect.box { stroke: var(--margin-red); stroke-width: 2.5; }
+.dg-node.ghost { opacity: 0.12; }
+.dg-node.acc rect.box { stroke: var(--accept); stroke-width: 2; }
+.dg-edge path { fill: none; stroke: var(--ink-3); stroke-width: 1.4; }
+.dg-edge.nt path { stroke-dasharray: 5 3; }
+.dg-edge text { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); font-weight: 600; }
+.dg-edge rect { fill: var(--sheet); }
+.dg-edge.ghost { opacity: 0.08; }
+.dg-edge.cur path { stroke: var(--margin-red); stroke-width: 2.4; }
+.dg-edge.cur text { fill: var(--margin-red); }
+.arrowhead { fill: var(--ink-3); }
+.arrowhead.cur { fill: var(--margin-red); }
+
+/* árvores */
+.tree .tn rect, .tree .tn ellipse { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.2; }
+.tree .tn text { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+.tree .tn text.sub { font-size: 11px; fill: var(--ink-2); }
+.tree .tn text.sub.inh { fill: var(--goto); }
+.tree .tn text.sub.syn { fill: var(--reduce); }
+.tree .tn.leaf rect { fill: var(--paper); }
+.tree .tn.new rect, .tree .tn.new ellipse { stroke: var(--margin-red); stroke-width: 2.5; }
+.tree .tn.focus rect, .tree .tn.focus ellipse { stroke: var(--marker); stroke-width: 2.5; fill: var(--marker-wash); }
+.tree .tn.err rect, .tree .tn.err ellipse { stroke: var(--conflict); stroke-width: 2.2; fill: var(--conflict-wash); }
+.tree .tn.dim { opacity: 0.35; }
+.tree path.te { fill: none; stroke: var(--ink-3); stroke-width: 1.2; }
+
+/* ---------- pilha / passo a passo ---------- */
+.stackviz { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; margin: 8px 0; }
+.sframe {
+  display: flex; flex-direction: column; align-items: center; min-width: 46px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--sheet); font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.25;
+}
+.sframe .sy { font-weight: 700; }
+.sframe .ss { color: var(--ink-2); font-size: 0.78rem; }
+.sframe.pop { border-color: var(--reduce); background: var(--reduce-wash); text-decoration: line-through; }
+.sframe.push { border-color: var(--accept); background: var(--accept-wash); }
+.sframe.top { box-shadow: inset 0 -3px 0 var(--marker); }
+.tape { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 0.9rem; }
+.tape span { padding: 2px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); }
+.tape span.cur { border-color: var(--marker); background: var(--marker-wash); font-weight: 700; }
+.tape span.done { opacity: 0.35; text-decoration: line-through; }
+.explain {
+  background: var(--sheet); border: 1px solid var(--rule); border-left: 4px solid var(--marker); border-radius: 8px; padding: 10px 14px; margin: 8px 0;
+}
+.explain.k-r { border-left-color: var(--reduce); }
+.explain.k-acc { border-left-color: var(--accept); }
+.explain.k-err { border-left-color: var(--conflict); }
+.explain.k-s { border-left-color: var(--shift); }
+.explain p { margin: 4px 0; }
+.trace { font-family: var(--font-mono); font-size: 0.82rem; }
+.trace td { white-space: nowrap; }
+.trace tr.future { display: none; }
+.trace tr.now td { background: var(--hl); }
+.trace td.act-s { color: var(--shift); font-weight: 600; }
+.trace td.act-r { color: var(--reduce); font-weight: 600; }
+.trace td.act-acc { color: var(--accept); font-weight: 700; }
+.trace td.act-err { color: var(--conflict); font-weight: 700; }
+
+.sentlines { font-family: var(--font-mono); font-size: 0.88rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); overflow-x: auto; }
+.sentlines div { display: grid; grid-template-columns: 2.2em auto; gap: 6px; padding: 4px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.sentlines div:last-child { border-bottom: 0; }
+.sentlines div.now { background: var(--hl); }
+.sentlines div.future { display: none; }
+.sentlines .mk { color: var(--ink-3); }
+.sentlines .mk.s { color: var(--shift); }
+.sentlines .mk.r { color: var(--reduce); }
+.sentlines .act { display: block; color: var(--reduce); white-space: normal; font-size: 0.82rem; }
+.sentlines .dot { color: var(--margin-red); font-weight: 700; }
+
+/* itens e estados */
+.statecard { border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); padding: 8px 12px; min-width: 0; }
+.statecard h4 { margin: 0 0 4px; font-family: var(--font-display); font-size: 1rem; }
+.itemlist { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.itemlist li { padding: 2px 0; white-space: nowrap; }
+.itemlist li.sepk { border-top: 1px dashed var(--rule); margin-top: 4px; padding-top: 4px; }
+.itemlist li.hl { background: var(--hl); border-radius: 4px; }
+.itemlist li.newi { color: var(--accept); }
+.itemlist li .r { font-family: var(--font-body); font-size: 0.82rem; color: var(--ink-2); white-space: normal; display: block; padding-left: 1.2em; }
+.scroll-x { overflow-x: auto; }
+
+/* regras de inferência */
+.rule { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 0.88rem; margin: 6px 4px; max-width: 100%; vertical-align: middle; }
+.rule .rbody { display: inline-flex; flex-direction: column; align-items: center; min-width: 0; }
+.rule .prem { display: flex; flex-wrap: wrap; gap: 6px 22px; justify-content: center; align-items: flex-end; padding: 0 6px 4px; }
+.rule .bar { align-self: stretch; border-top: 1.5px solid var(--ink); min-width: 3em; }
+.rule .conc { padding: 4px 6px 0; white-space: nowrap; }
+.rule .prem > span { white-space: nowrap; }
+.rulecard .rule { font-size: 0.8rem; }
+.rulecard .prem { flex-direction: column; align-items: center; gap: 2px; }
+.rule .rname { font-family: var(--font-body); font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
+.rulebox { overflow-x: auto; padding: 8px 4px; }
+.rulecards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); }
+.rulecard { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.rulecard h4 { margin: 0 0 4px; font-size: 0.9rem; }
+.rulecard p { font-size: 0.86rem; color: var(--ink-2); margin: 6px 0 0; }
+.slot { display: inline-block; min-width: 2.4em; padding: 0 4px; border-radius: 4px; background: var(--hl); }
+.slot.empty { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); }
+.bad { color: var(--conflict); font-weight: 700; }
+.good { color: var(--accept); font-weight: 700; }
+
+/* tabelas de símbolos */
+.scopes { position: relative; }
+.scopebox { border: 1.5px solid var(--ink-2); border-radius: 8px; background: var(--sheet); min-width: 170px; font-family: var(--font-mono); font-size: 0.82rem; }
+.scopebox .sh { font-family: var(--font-body); font-size: 0.78rem; font-weight: 700; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--paper); border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; gap: 8px; }
+.scopebox .sh i { font-style: normal; font-weight: 400; color: var(--ink-3); }
+.scopebox table { border-collapse: collapse; width: 100%; }
+.scopebox td { padding: 2px 8px; white-space: nowrap; }
+.scopebox tr.newe td { background: var(--accept-wash); }
+.scopebox tr.found td { background: var(--hl); font-weight: 700; }
+.scopebox.cur { border-color: var(--marker); box-shadow: 0 0 0 3px var(--marker-wash); }
+.scopebox.path { border-color: var(--reduce); }
+.scopebox.closed { opacity: 0.75; border-style: dashed; }
+.scopebox .empty-row td { color: var(--ink-3); font-style: italic; }
+.log { list-style: none; margin: 0; padding: 0; font-size: 0.88rem; }
+.log li { padding: 4px 8px; border-bottom: 1px solid var(--grid); }
+.log li.e { color: var(--conflict); }
+.log li.now { background: var(--hl); }
+
+/* hierarquia de tipos */
+.hier .hn { cursor: pointer; }
+.hier .hn rect { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.2; }
+.hier .hn text { font-family: var(--font-mono); font-size: 13px; fill: var(--ink); }
+.hier .hn.pick rect { fill: var(--marker-wash); stroke: var(--marker); stroke-width: 2.2; }
+.hier .hn.join rect { fill: var(--accept-wash); stroke: var(--accept); stroke-width: 2.5; }
+.hier .hn.anc rect { stroke: var(--reduce); }
+.hier line { stroke: var(--ink-3); stroke-width: 1.2; }
+
+/* cartões de treino */
+.flash { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.flash details { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 14px; }
+.flash summary { cursor: pointer; font-weight: 700; list-style: none; }
+.flash summary::-webkit-details-marker { display: none; }
+.flash summary::after { content: "Ver resposta"; display: block; margin-top: 6px; font-weight: 400; font-size: 0.82rem; color: var(--marker); }
+.flash details[open] summary::after { content: "Esconder"; }
+.flash details > div { margin-top: 8px; font-size: 0.93rem; }
+
+/* capa */
+.cover-quote { font-family: var(--font-hand); font-size: clamp(1.35rem, 1rem + 1.2vw, 1.8rem); line-height: 1.25; color: var(--ink); margin: 0; }
+.qcards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); margin-top: 18px; }
+.qcard { background: var(--sheet); border: 1px solid var(--rule); border-top: 4px solid var(--shift); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.qcard.q2 { border-top-color: var(--reduce); }
+.qcard.q3 { border-top-color: var(--goto); }
+.qcard h3 { margin: 4px 0 6px; font-family: var(--font-display); font-size: 1.1rem; }
+.qcard ul { margin: 6px 0 10px; padding-left: 1.1em; font-size: 0.92rem; }
+.qcard .go { font-size: 0.9rem; }
+
+/* paginação */
+.pager {
+  display: flex; justify-content: space-between; gap: 12px; max-width: 1180px; margin: 36px auto 0; padding-top: 14px; border-top: 1px solid var(--rule);
+}
+.pager a {
+  display: flex; flex-direction: column; text-decoration: none; color: var(--ink); max-width: 48%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet);
+}
+.pager a:hover { border-color: var(--marker); }
+.pager a small { color: var(--ink-3); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.pager a.next { margin-left: auto; text-align: right; }
+.pager a[hidden] { display: none; }
+.mobnav { display: none; }
+
+.scrim { display: none; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .index {
+    position: fixed; z-index: 25; top: calc(var(--top-h) + env(safe-area-inset-top, 0px)); left: 0; bottom: 0; width: min(88vw, 340px); height: auto;
+    transform: translateX(-105%); transition: transform 0.2s ease, visibility 0.2s; box-shadow: var(--shadow);
+    visibility: hidden; /* fechado: fora da ordem de Tab */
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+  }
+  body.index-open .index { transform: none; visibility: visible; }
+  body.index-open .scrim { display: block; position: fixed; inset: 0; z-index: 24; background: rgba(10, 16, 28, 0.35); }
+  .modtabs { display: none; }
+  .counter { margin-left: auto; }
+  .mobnav {
+    display: flex; position: fixed; z-index: 15; left: 0; right: 0; bottom: 0; gap: 8px; justify-content: space-between;
+    padding-block: 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: var(--sheet); border-top: 1px solid var(--rule);
+  }
+  .mobnav .btn { flex: 1; justify-content: center; }
+  .stage { padding-block: 20px 110px; }
+}
+@media (min-width: 901px) { .menu-btn { display: none; } }
+@media (max-width: 520px) {
+  .brand span { display: none; }
+  .lrtable { font-size: 0.78rem; }
+  .lrtable th, .lrtable td { padding: 4px 6px; min-width: 2.6em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+</style>
+<script src="vendor/dagre.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <button class="iconbtn menu-btn" id="menu" type="button" aria-label="Abrir índice">☰ Índice</button>
+  <div class="brand"><b>Revisão P2 · Compiladores</b><span>análise ascendente · SDT e escopo · tipos</span></div>
+  <nav class="modtabs" aria-label="Questões da prova">
+    <button class="modtab" type="button" data-mod="q1"><b>Q1</b> Análise ascendente</button>
+    <button class="modtab" type="button" data-mod="q2"><b>Q2</b> Escopo + SDT</button>
+    <button class="modtab" type="button" data-mod="q3"><b>Q3</b> Tipos</button>
+  </nav>
+  <span class="counter" id="counter">1 / 1</span>
+  <div class="progress" aria-hidden="true"><i id="progress"></i></div>
+</header>
+<div class="scrim" id="scrim"></div>
+<div class="shell">
+<nav class="index" id="index" aria-label="Índice de slides"></nav>
+<main class="stage">
+
+<!-- ======================= INÍCIO ======================= -->
+<section class="slide" id="inicio" data-mod="inicio" data-title="Como usar esta revisão">
+  <header>
+    <div class="eyebrow">Compiladores · Prova 2</div>
+    <h1>Revisão guiada para as três questões da prova</h1>
+    <p class="lede">Cada slide ensina um procedimento e deixa você executá-lo. Autômatos e tabelas são calculados por um parser LR de verdade, e todo passo a passo pode ser avançado um passo de cada vez.</p>
+  </header>
+  <div class="cols-2-1">
+    <div class="card">
+      <div class="eyebrow">Recado do professor</div>
+      <p class="cover-quote">“Sobre a prova, serão três questões: 1) análise sintática ascendente (construir autômato e tabela de ações do autômato); 2) Escopo + Tradução dirigida por sintaxe, framework de anotação da gramática; 3) Inferência de tipos.”</p>
+    </div>
+    <div class="card">
+      <h3>Como navegar</h3>
+      <ul>
+        <li><kbd>←</kbd> <kbd>→</kbd> trocam de slide. No celular, use os botões do rodapé e o ☰ Índice.</li>
+        <li>Nos simuladores, <b>Avançar ▶</b> executa um passo e <b>▷ Animar</b> roda sozinho.</li>
+        <li>Toque nos estados do autômato e nas células da tabela para ver de onde cada um veio.</li>
+        <li><span class="star" style="color:var(--margin-red);font-weight:700">★</span> no índice marca os slides mais parecidos com a prova.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="qcards">
+    <div class="qcard">
+      <span class="tag q1">Questão 1</span>
+      <h3>Análise sintática ascendente</h3>
+      <p>Construir o autômato (closure e goto), preencher a tabela Ações/Goto, procurar conflitos e rodar a pilha.</p>
+      <ul><li>Lista 1, Ex. 1 a 4 (o Ex. 2 é o modelo completo)</li><li>Exemplo do quadro: Cmd → Lhs = Rhs | Rhs</li><li>Laboratório para conferir qualquer gramática</li></ul>
+      <a class="go" href="#q1-roteiro">Começar a Questão 1 →</a>
+    </div>
+    <div class="qcard q2">
+      <span class="tag q2">Questão 2</span>
+      <h3>Escopo + tradução dirigida por sintaxe</h3>
+      <p>Anotar a gramática com ações, construir AST e valores durante o parsing, e montar a tabela de símbolos com escopos.</p>
+      <ul><li>Lista 2, Ex. 1 a 4 (AST, interpretador, a(i), pós/prefixa)</li><li>Lista 2, Ex. 5 e 6 (let horizontal, escopos, <code>use</code>)</li></ul>
+      <a class="go" href="#q2-sdd">Começar a Questão 2 →</a>
+    </div>
+    <div class="qcard q3">
+      <span class="tag q3">Questão 3</span>
+      <h3>Inferência de tipos</h3>
+      <p>Ler e aplicar regras O, M, C ⊢ e : T, com subtipos, join e recuperação de erros com NoType.</p>
+      <ul><li>Regras do quadro (Var, Aritmética, If, New, Let, Despacho)</li><li>Lista 2, Ex. 7 (let com várias declarações)</li></ul>
+      <a class="go" href="#q3-notacao">Começar a Questão 3 →</a>
+    </div>
+  </div>
+  <div class="note warn">
+    <p><b>Três correções no material, explicadas nos slides correspondentes:</b></p>
+    <ul>
+      <li>Lista 1, Ex. 1: o enunciado pede para mostrar que a gramática <i>não</i> é LR(0), mas ela <b>é</b> LR(0); o próprio gabarito chega a uma tabela sem conflitos.</li>
+      <li>Lista 2, Ex. 2: o gabarito põe parênteses em E → E₁ + T e de novo em T → ( E ), o que gera “((3.5 + 2))”. Para obter a saída do enunciado, T → ( E ) só repassa a string.</li>
+      <li>Lista 2, Ex. 7: a fórmula geral do gabarito desloca um índice (colocaria xᵢ no ambiente do próprio inicializador eᵢ). O exemplo numérico do gabarito está certo; aqui a regra segue o exemplo.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================= Q1 ======================= -->
+<section class="slide" id="q1-roteiro" data-mod="q1" data-title="O roteiro da Questão 1">
+  <header>
+    <div class="eyebrow">Questão 1 · Análise sintática ascendente</div>
+    <h1>Construir o autômato e a tabela em seis passos</h1>
+    <p class="lede">Toda questão de LR segue a mesma receita. O que muda entre LR(0), SLR, LR(1) e LALR é só o passo 4: em quais colunas entram as reduções.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>A receita</h3>
+      <ol>
+        <li><b>Aumente e numere.</b> Acrescente Start → S (produção 0) e numere as demais: r1, r2, …</li>
+        <li><b>Estado inicial.</b> CC₀ = closure({[Start → • S, eof]}).</li>
+        <li><b>Demais estados.</b> Para cada estado e cada símbolo X depois de um ponto: CCⱼ = goto(CCᵢ, X). Conjunto novo vira estado novo; repetido reaproveita o existente.</li>
+        <li><b>Tabela.</b> Transição por terminal → <span class="a-s mono" style="color:var(--shift)">sN</span>; por não terminal → <span class="mono" style="color:var(--goto)">gN</span>; item completo → <span class="mono" style="color:var(--reduce)">rN</span> nas colunas do método; [Start → S •, eof] → <span class="mono" style="color:var(--accept)">acc</span>.</li>
+        <li><b>Conflitos.</b> Duas ações na mesma célula ⇒ a gramática não é daquele tipo.</li>
+        <li><b>Pilha.</b> Execute a entrada com pares (símbolo, estado): Passo | Pilha | Entrada | Ação.</li>
+      </ol>
+    </div>
+    <div>
+      <div class="stepinfo">Algoritmo como no caderno:</div>
+<pre class="code"><span class="cm">// coleção canônica (AFD)</span>
+CC₀ = closure({[Start → • OldStart, eof]})
+inicialize o AFD com estado inicial CC₀
+<span class="kw">enquanto</span> o AFD ainda está mudando <span class="kw">faça</span>
+  <span class="kw">para cada</span> estado CCᵢ não visitado <span class="kw">faça</span>
+    marque CCᵢ como visitado
+    <span class="kw">para cada</span> x seguindo • em CCᵢ <span class="kw">faça</span>
+      CCⱼ = goto(CCᵢ, x)
+      <span class="kw">se</span> CCⱼ ∉ AFD <span class="kw">então</span> crie o estado CCⱼ
+      AFD[i, j] = x            <span class="cm"># transição</span>
+
+<span class="kw">def</span> goto(CCᵢ, x)
+  próximo = ∅
+  <span class="kw">para cada</span> item [X → α • x β, ℓ] em CCᵢ
+    próximo = próximo ∪ {[X → α x • β, ℓ]}
+  <span class="kw">retorne</span> closure(próximo)
+
+<span class="kw">def</span> closure(CCᵢ)
+  <span class="kw">enquanto</span> CCᵢ ainda muda
+    <span class="kw">para cada</span> [X → α • Y β, ℓ] em CCᵢ e produção Y → δ
+      <span class="kw">para cada</span> s ∈ FIRST(β ℓ)
+        CCᵢ = CCᵢ ∪ {[Y → • δ, s]}
+  <span class="kw">retorne</span> CCᵢ</pre>
+    </div>
+  </div>
+  <p class="hand">No LR(0) e no SLR os itens não têm o “, ℓ”: o closure só acrescenta Y → • δ.</p>
+</section>
+
+<section class="slide" id="q1-itens" data-mod="q1" data-title="Itens, closure e lookahead" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 1 · Fundamentos</div>
+    <h1>O que um item diz, e de onde sai o lookahead</h1>
+    <p class="lede">Um item LR(1) <code>[A → B • C f, a]</code> lê-se: “já reconheci B; ainda faltam C f; quando a produção inteira terminar, o próximo token pode ser a”.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>A regra do lookahead</h3>
+      <p>Se um item tem o ponto antes de um não terminal Y:</p>
+      <p class="mono" style="font-size:1rem">[X → α • Y β, ℓ] ⇒ [Y → • δ, s] para cada s ∈ FIRST(β ℓ)</p>
+      <p>Em palavras: o que pode aparecer <b>depois do Y</b> é o começo de β; se β pode sumir (ou não existe), é o próprio ℓ.</p>
+      <ul>
+        <li>[S → • A a, eof]: depois de A vem <code>a</code> ⇒ FIRST(a eof) = {a}.</li>
+        <li>[A → • B C f, a]: depois de B vem <code>C f</code> ⇒ FIRST(C f a) = FIRST(C) = {c}.</li>
+        <li>[A → B • C, a]: depois de C não vem nada ⇒ FIRST(a) = {a}.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>goto avança <i>todos</i> os itens</h3>
+      <p>goto(CC₀, B) pega os dois itens com B depois do ponto, [A → • B C, a] e [A → • B C f, a], e avança os dois. Esquecer um deles é o erro mais comum.</p>
+      <p>Itens iguais em produção e ponto, mas com lookaheads diferentes, costumam ser escritos juntos: [C → • c, {a, f}].</p>
+    </div>
+  </div>
+  <h2>Closure item por item (Lista 1, Ex. 2)</h2>
+  <div data-w="closureDemo"></div>
+</section>
+
+<section class="slide" id="q1-metodos" data-mod="q1" data-title="LR(0), SLR, LR(1) e LALR">
+  <header>
+    <div class="eyebrow">Questão 1 · Comparando os métodos</div>
+    <h1>Mesmo procedimento, reduções em colunas diferentes</h1>
+  </header>
+  <div class="tbl-wrap"><table class="t">
+    <thead><tr><th>Método</th><th>Autômato</th><th>Redução A → α vai para…</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td><b>LR(0)</b></td><td>itens sem lookahead</td><td>todas as colunas de terminais (inclusive eof)</td><td>estado com item completo não pode ter mais nada</td></tr>
+      <tr><td><b>SLR(1)</b></td><td>o mesmo autômato LR(0)</td><td>colunas de FOLLOW(A)</td><td>FOLLOW é global: às vezes inclui tokens impossíveis naquele estado</td></tr>
+      <tr><td><b>LR(1)</b></td><td>itens com lookahead</td><td>só a coluna do lookahead do item</td><td>mais estados; o mais poderoso dos quatro</td></tr>
+      <tr><td><b>LALR(1)</b></td><td>LR(1) com estados de mesmo núcleo fundidos</td><td>lookaheads unidos na fusão</td><td>mesmo número de estados do LR(0); fusão pode criar reduce/reduce</td></tr>
+    </tbody>
+  </table></div>
+  <div class="cols">
+    <div class="card">
+      <h3>Conflitos</h3>
+      <ul>
+        <li><b>shift/reduce</b>: na mesma célula, deslocar ou reduzir.</li>
+        <li><b>reduce/reduce</b>: na mesma célula, reduzir por duas produções.</li>
+      </ul>
+      <p>Ter item completo e item de deslocamento no mesmo estado <b>não</b> é conflito por si só: só é se as ações caírem na mesma coluna.</p>
+    </div>
+    <div class="card">
+      <h3>Como classificar rápido</h3>
+      <ol>
+        <li>Monte o LR(0). Sem conflitos? É LR(0) — e portanto SLR, LALR e LR(1).</li>
+        <li>Com conflito, use FOLLOW (SLR). Sumiu? É SLR.</li>
+        <li>Ainda há conflito: monte o LR(1). Sem conflito? É LR(1).</li>
+        <li>Funda estados LR(1) de mesmo núcleo. Sem conflito? É LALR.</li>
+      </ol>
+      <p class="mono">LR(0) ⊂ SLR(1) ⊂ LALR(1) ⊂ LR(1)</p>
+    </div>
+  </div>
+  <p class="hand">A fusão LALR nunca cria shift/reduce novo; só reduce/reduce.</p>
+</section>
+
+<section class="slide" id="q1-aula" data-mod="q1" data-title="Exemplo do quadro: Cmd → Lhs = Rhs" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 1 · Exemplo resolvido em aula</div>
+    <h1>Cmd → Lhs = Rhs | Rhs: o LR(1) completo do quadro</h1>
+    <p class="lede">É a gramática das atribuições com ponteiro (<code>id = **id</code>). A numeração CC₀…CC₁₃ e a tabela coincidem com o caderno, e a aba Pilha refaz os 13 passos do quadro.</p>
+  </header>
+  <pre class="grammar"><span class="num">r0:</span> Start → Cmd      <span class="num">r1:</span> Cmd → Lhs = Rhs   <span class="num">r2:</span> Cmd → Rhs
+<span class="num">r3:</span> Lhs → * Rhs      <span class="num">r4:</span> Lhs → id         <span class="num">r5:</span> Rhs → Lhs</pre>
+  <div data-w="workbench" data-ex="cmd" data-method="lr1" data-tabs="auto,build,table,trace" data-mode="kernel" data-input="id = * * id"></div>
+  <div class="note">
+    <p>Repare que CC₄ e CC₁₂ têm os mesmos itens com lookaheads diferentes ({=, eof} contra eof). No LR(1) eles são estados distintos; no LALR, viram um só. O mesmo vale para 5/11, 7/13 e 8/10.</p>
+  </div>
+</section>
+
+<section class="slide" id="q1-aula-metodos" data-mod="q1" data-title="Por que o Cmd não é SLR, mas é LALR">
+  <header>
+    <div class="eyebrow">Questão 1 · Exemplo do quadro</div>
+    <h1>O conflito que só o lookahead resolve</h1>
+    <p class="lede">Troque o método e veja a célula [2, =] mudar.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>SLR: conflito em CC₂</h3>
+      <p>CC₂ = { Cmd → Lhs • = Rhs, Rhs → Lhs • }.</p>
+      <p>O SLR reduz Rhs → Lhs em FOLLOW(Rhs) = {=, eof}. Mas o primeiro item desloca <code>=</code>: a célula [2, =] fica com <b>s6 / r5</b>.</p>
+      <p>FOLLOW(Rhs) tem “=” porque Lhs → * Rhs e Cmd → Lhs = Rhs. Só que ali, no começo do comando, um Rhs nunca é seguido de “=”.</p>
+    </div>
+    <div class="card">
+      <h3>LR(1) e LALR: sem conflito</h3>
+      <p>No LR(1) o item é [Rhs → Lhs •, eof]: a redução vai só para eof, e “=” fica com s6.</p>
+      <p>O LALR funde 4/12, 5/11, 7/13 e 8/10 (10 estados, como o LR(0)) e continua sem conflito.</p>
+      <p><b>Resposta:</b> não é LR(0) nem SLR(1); é LALR(1) e LR(1).</p>
+    </div>
+  </div>
+  <div data-w="compareMethods" data-ex="cmd" data-method="slr" data-methods="lr0,slr,lr1,lalr"></div>
+</section>
+
+<section class="slide" id="q1-ex1" data-mod="q1" data-title="Lista 1 · Ex. 1 (tick tock)">
+  <header>
+    <div class="eyebrow">Questão 1 · Lista 1 · Exercício 1</div>
+    <h1>CN → CN tick tock | tick tock</h1>
+    <p class="lede">Gera uma ou mais repetições de “tick tock”. Use os botões de método para responder (a) a (d).</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>(a) AFD LR(0)</h3>
+      <p>CC₀ = {Start → • CN, CN → • CN tick tock, CN → • tick tock}. goto(CC₀, CN) avança <b>dois</b> itens: CC₁ = {Start → CN •, CN → CN • tick tock}.</p>
+      <p>A tabela LR(0) não tem conflito: em CC₁ o item completo é o de aceitação (coluna eof) e o deslocamento é em tick. <b>A gramática é LR(0)</b>, ao contrário do que diz o enunciado.</p>
+    </div>
+    <div class="card">
+      <h3>(b) SLR · (c) LR(1) · (d) LALR</h3>
+      <p>(b) FOLLOW(CN) = {tick, eof}: as reduções saem da coluna tock. Continua sem conflito.</p>
+      <p>(c) Mesmos 6 estados, com lookahead {tick, eof} nos itens de CN.</p>
+      <p>(d) Nenhum par de estados tem o mesmo núcleo: nada a fundir. LALR = LR(1).</p>
+      <p><b>É LR(0), SLR(1), LALR(1) e LR(1).</b></p>
+    </div>
+  </div>
+  <div data-w="workbench" data-ex="ex1" data-method="lr0" data-methods="lr0,slr,lr1,lalr" data-tabs="auto,build,table,trace" data-mode="full"></div>
+</section>
+
+<section class="slide" id="q1-ex2a" data-mod="q1" data-title="Lista 1 · Ex. 2 (a): coleção LR(1)" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 1 · Lista 1 · Exercício 2 (a)</div>
+    <h1>A coleção canônica LR(1), um goto de cada vez</h1>
+    <p class="lede">Este é o formato da prova: avance os passos e, em cada closure, leia a justificativa de cada lookahead.</p>
+  </header>
+  <pre class="grammar"><span class="num">r0:</span> Start → S    <span class="num">r1:</span> S → A a    <span class="num">r2:</span> A → B C    <span class="num">r3:</span> A → B C f    <span class="num">r4:</span> B → b    <span class="num">r5:</span> C → c</pre>
+  <div data-w="workbench" data-ex="ex2" data-method="lr1" data-tabs="build,auto" data-mode="full" data-build-mode="full"></div>
+  <div class="note">
+    <p><b>Os dois closures que valem ponto:</b> em CC₀, [B → • b, c] porque depois de B vem C (FIRST(C a) = FIRST(C f a) = {c}). Em CC₃, [C → • c, {a, f}]: <code>a</code> vem de [A → B • C, a] (nada depois de C, sobra o lookahead) e <code>f</code> vem de [A → B • C f, a].</p>
+  </div>
+</section>
+
+<section class="slide" id="q1-ex2b" data-mod="q1" data-title="Lista 1 · Ex. 2 (b, c): tabela" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 1 · Lista 1 · Exercício 2 (b) e (c)</div>
+    <h1>Da coleção para a tabela Ações/Goto</h1>
+    <p class="lede">Toque em qualquer célula para ver o item que a gerou. A coluna Start não aparece no Goto: a produção aumentada só serve para aceitar.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>(c) É LR(1)? Sim.</h3>
+      <p>O único estado com item completo e deslocamento juntos é CC₆:</p>
+      <p class="mono">[A → B C •, a]   [A → B C • f, a]</p>
+      <p>Com lookahead <code>a</code> reduz r2; com <code>f</code> desloca s8. Células diferentes ⇒ sem conflito. A tabela inteira não tem conflitos ⇒ <b>LR(1)</b>.</p>
+    </div>
+    <div class="card">
+      <h3>Bônus: e os outros métodos?</h3>
+      <p>No LR(0), r2 ocuparia a linha inteira de CC₆, inclusive a coluna f, onde já há s8: conflito. Então <b>não é LR(0)</b>.</p>
+      <p>No SLR, FOLLOW(A) = {a} resolve: é SLR(1), e também LALR(1).</p>
+    </div>
+  </div>
+  <div data-w="compareMethods" data-ex="ex2" data-method="lr1" data-methods="lr0,slr,lr1,lalr"></div>
+</section>
+
+<section class="slide" id="q1-ex2d" data-mod="q1" data-title="Lista 1 · Ex. 2 (d): pilha para b c f a" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 1 · Lista 1 · Exercício 2 (d)</div>
+    <h1>Executando o parser com a pilha de pares (símbolo, estado)</h1>
+    <p class="lede">A cada passo, consulte Ação[estado do topo, próximo token]. A tabela ao lado acende a célula usada. Experimente também entradas erradas, como <code>b c a a</code>.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Deslocamento</h3>
+      <p>sN: empilha (token, N) e consome o token.</p>
+    </div>
+    <div class="card">
+      <h3>Redução</h3>
+      <p>rN com A → β: desempilha |β| pares, olha o estado exposto e empilha (A, Goto[exposto, A]). A entrada <b>não</b> muda.</p>
+    </div>
+    <div class="card">
+      <h3>Notação</h3>
+      <p>O fundo da pilha é (⊥, 0), como no quadro. O gabarito escreve (eof, 0): é o mesmo marcador.</p>
+    </div>
+  </div>
+  <div data-w="workbench" data-ex="ex2" data-method="lr1" data-tabs="trace" data-input="b c f a"></div>
+</section>
+
+<section class="slide" id="q1-ex3" data-mod="q1" data-title="Lista 1 · Ex. 3 (braço robótico)">
+  <header>
+    <div class="eyebrow">Questão 1 · Lista 1 · Exercício 3</div>
+    <h1>Braço robótico: projetar uma gramática LR(1)</h1>
+    <p class="lede">Válida = em todo prefixo, nº de ↓ ≥ nº de ↑. O saldo final pode ser positivo (sobram maçãs).</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>(a) A gramática</h3>
+<pre class="grammar"><span class="num">r0:</span> Goal → S
+<span class="num">r1:</span> S → ↓ S          <span class="cm">// esta ↓ nunca é retirada</span>
+<span class="num">r2:</span> S → ↓ B ↑ S      <span class="cm">// ↓ … ↑ casados</span>
+<span class="num">r3:</span> S → ε
+<span class="num">r4:</span> B → ↓ B ↑ B      <span class="cm">// balanceada (saldo 0)</span>
+<span class="num">r5:</span> B → ε</pre>
+      <p><b>B</b> gera as sequências balanceadas; <b>S</b>, todas as válidas. Uma sequência válida começa com ↓: ou essa ↓ nunca é compensada (S → ↓ S), ou é compensada por uma ↑, com um trecho balanceado entre elas (S → ↓ B ↑ S).</p>
+    </div>
+    <div class="card">
+      <h3>(b) Prova de que é LR(1)</h3>
+      <p>FOLLOW(S) = {eof} e FOLLOW(B) = {↑}. A tabela (abaixo) não tem conflitos nem no SLR: as reduções de S caem em eof e as de B em ↑, e os deslocamentos são em ↓ (ou ↑ onde não há redução).</p>
+      <p>Sem conflito no SLR ⇒ é SLR(1) ⇒ <b>é LR(1)</b>. A coleção LR(1) tem os mesmos 11 estados: todo item de S tem lookahead eof e todo item de B tem ↑.</p>
+      <p class="stepinfo">Produções vazias: reduzir S → ε desempilha 0 pares e consulta o goto no próprio topo.</p>
+    </div>
+  </div>
+  <h2>Teste sequências</h2>
+  <div data-w="robotCheck"></div>
+  <h2>Autômato, tabela e pilha</h2>
+  <div data-w="workbench" data-ex="robo" data-method="lr1" data-methods="slr,lr1" data-tabs="auto,table,trace" data-mode="full" data-keys="↓,↑"></div>
+</section>
+
+<section class="slide" id="q1-ex4" data-mod="q1" data-title="Lista 1 · Ex. 4 (LR(0) basta)">
+  <header>
+    <div class="eyebrow">Questão 1 · Lista 1 · Exercício 4</div>
+    <h1>Não é LL(1), mas é LR(0) — logo LR(1)</h1>
+    <p class="lede">Um parser LL(1) teria de escolher entre A e B ao ver “(”, sem saber quantos “(” virão antes de “)” ou “}”. O LR adia a decisão até o fim.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Gramática aumentada</h3>
+<pre class="grammar"><span class="num">r0:</span> Goal → Start    <span class="num">r1:</span> Start → A    <span class="num">r2:</span> Start → B
+<span class="num">r3:</span> A → ( A )       <span class="num">r4:</span> A → a
+<span class="num">r5:</span> B → ( B }       <span class="num">r6:</span> B → b</pre>
+      <p>CC₄ = goto(CC₀, “(”) guarda as duas possibilidades ao mesmo tempo: {A → ( • A ), B → ( • B }} mais o closure. Por isso não é preciso decidir cedo.</p>
+    </div>
+    <div class="card">
+      <h3>A prova</h3>
+      <p>No LR(0), todo estado com item completo tem <b>só</b> aquele item (CC₂, CC₃, CC₅, CC₆, CC₉, CC₁₀). Nenhuma célula tem duas ações ⇒ <b>LR(0)</b> ⇒ LR(1).</p>
+      <p>Para treinar LALR: o LR(1) dessa gramática tem 18 estados (após “(” os lookaheads viram “)” e “}”), e a fusão LALR volta a 11.</p>
+    </div>
+  </div>
+  <div data-w="workbench" data-ex="ex4" data-method="lr0" data-methods="lr0,lr1,lalr" data-tabs="auto,table,trace" data-mode="full" data-input="( ( a ) )"></div>
+</section>
+
+<section class="slide" id="q1-lab" data-mod="q1" data-title="Laboratório: confira sua resposta">
+  <header>
+    <div class="eyebrow">Questão 1 · Laboratório</div>
+    <h1>Digite qualquer gramática e confira autômato e tabela</h1>
+    <p class="lede">Resolva no papel primeiro; depois use esta bancada para conferir estados, lookaheads, conflitos e a pilha.</p>
+  </header>
+  <div data-w="lab"></div>
+</section>
+
+<section class="slide" id="q1-check" data-mod="q1" data-title="Checklist da Questão 1">
+  <header>
+    <div class="eyebrow">Questão 1 · Antes de entregar</div>
+    <h1>Checklist e armadilhas</h1>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Construção</h3>
+      <ul>
+        <li>Gramática aumentada e produções numeradas (r0 é a aumentada).</li>
+        <li>CC₀ = closure({[Start → • S, eof]}).</li>
+        <li>No closure, lookahead = FIRST(β ℓ). Se β é vazio ou anulável, o ℓ do item passa adiante.</li>
+        <li>goto avança <b>todos</b> os itens com aquele símbolo depois do ponto, depois aplica closure.</li>
+        <li>Conjunto já existente ⇒ reaproveite o estado. No LR(1), lookaheads diferentes ⇒ estados diferentes.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Tabela e pilha</h3>
+      <ul>
+        <li>Terminal → s; não terminal → g; item completo → r; [Start → S •, eof] → acc (não é redução).</li>
+        <li>LR(0): redução na linha toda. SLR: FOLLOW. LR(1)/LALR: lookahead.</li>
+        <li>Conflito = duas ações na <b>mesma célula</b>.</li>
+        <li>Redução desempilha |β| pares (zero para ε), consulta Goto no estado exposto, não consome entrada.</li>
+        <li>Termine com a frase: “é / não é LR(1) porque …”.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= Q2 ======================= -->
+<section class="slide" id="q2-sdd" data-mod="q2" data-title="Atributos sintetizados e herdados">
+  <header>
+    <div class="eyebrow">Questão 2 · Framework de anotação da gramática</div>
+    <h1>Atributos que sobem e atributos que descem</h1>
+    <p class="lede">Uma <b>SDD</b> (definição dirigida por sintaxe) associa atributos aos símbolos e regras às produções. Uma <b>SDT</b> (tradução dirigida por sintaxe) insere trechos de código nas produções. A lista permite misturar as duas.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Sintetizado</h3>
+      <p>Calculado a partir dos filhos, do próprio nó ou de constantes: informação que <b>sobe</b>. Regras que definem atributos do símbolo à esquerda criam sintetizados.</p>
+      <p>Exemplos: <code>.val</code>, <code>.neg</code>, <code>.node</code>, <code>.str</code>, <code>.type</code>.</p>
+    </div>
+    <div class="card">
+      <h3>Herdado</h3>
+      <p>Vem do pai ou dos irmãos: informação que <b>desce</b>. Regras que definem atributos de símbolos à direita criam herdados.</p>
+      <p>Exemplo: <code>.pos</code> do número binário (e o ambiente de tipos).</p>
+    </div>
+    <div class="card">
+      <h3>Notação</h3>
+      <p>Em E → E₁ + T, o E da esquerda é o nó pai e E₁ é a outra ocorrência de E, no lado direito. São nós diferentes, com atributos diferentes.</p>
+    </div>
+  </div>
+  <h2>Exemplo do quadro: número binário com sinal</h2>
+  <div class="tbl-wrap"><table class="t">
+    <thead><tr><th>Produção</th><th>Regras semânticas</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">Number → Sign List</td><td class="mono">List.pos := 0 ; Number.val := −List.val se Sign.neg, senão List.val</td></tr>
+      <tr><td class="mono">Sign → + | −</td><td class="mono">Sign.neg := false | Sign.neg := true</td></tr>
+      <tr><td class="mono">List → List₁ Bit</td><td class="mono">List₁.pos := List.pos + 1 ; Bit.pos := List.pos ; List.val := List₁.val + Bit.val</td></tr>
+      <tr><td class="mono">List → Bit</td><td class="mono">Bit.pos := List.pos ; List.val := Bit.val</td></tr>
+      <tr><td class="mono">Bit → 0 | 1</td><td class="mono">Bit.val := 0 | Bit.val := 2^Bit.pos</td></tr>
+    </tbody>
+  </table></div>
+  <div data-w="binary"></div>
+</section>
+
+<section class="slide" id="q2-ex1" data-mod="q2" data-title="Lista 2 · Ex. 1: AST de 1 − (3 + 2)" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 1</div>
+    <h1>Construindo a AST nas reduções</h1>
+    <p class="lede">O parser ascendente executa a ação de uma produção no momento em que a reduz. Por isso a árvore nasce das folhas para a raiz.</p>
+  </header>
+  <div class="tbl-wrap"><table class="t">
+    <thead><tr><th>Produção</th><th>Ação</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">E → E₁ + T</td><td class="mono">E.node := mkNodePlus(E₁.node, T.node)</td></tr>
+      <tr><td class="mono">E → E₁ − T</td><td class="mono">E.node := mkNodeMinus(E₁.node, T.node)</td></tr>
+      <tr><td class="mono">E → T</td><td class="mono">E.node := T.node</td></tr>
+      <tr><td class="mono">T → ( E )</td><td class="mono">T.node := E.node</td></tr>
+      <tr><td class="mono">T → intLit</td><td class="mono">T.node := mkNodeInt(intLit.val)</td></tr>
+      <tr><td class="mono">T → floatLit</td><td class="mono">T.node := mkNodeFloat(floatLit.val)</td></tr>
+    </tbody>
+  </table></div>
+  <div data-w="astBuild"></div>
+  <div class="note"><p>As produções de repasse (E → T, T → ( E )) não criam nó: copiam o ponteiro. Os parênteses somem da AST, mas a forma da árvore (Plus embaixo de Minus) guarda a precedência que eles impunham.</p></div>
+</section>
+
+<section class="slide" id="q2-ex2" data-mod="q2" data-title="Lista 2 · Ex. 2: interpretador" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 2</div>
+    <h1>Interpretador com .str, .type e .val</h1>
+    <p class="lede">Três atributos sintetizados por símbolo. A conversão de tipos acontece na operação: se um lado é float, o resultado é float e o outro lado é convertido com <code>cast</code>.</p>
+  </header>
+  <div class="cols">
+<pre class="code">Start → E { println(E.str + " = " + E.val) }
+
+E → E₁ + T {
+    E.str  := "(" + E₁.str + " + " + T.str + ")"
+    E.type := float <span class="kw">se</span> E₁.type = float <span class="kw">ou</span> T.type = float
+              <span class="kw">senão</span> int
+    E.val  := cast(E.type, E₁.val) + cast(E.type, T.val)
+}
+E → E₁ − T { igual, com − }
+E → T      { E.str := T.str; E.type := T.type; E.val := T.val }
+T → ( E )  { T.str := E.str; T.type := E.type; T.val := E.val }
+T → intLit { T.str := intLit.lexeme; T.type := int;
+             T.val := cast(int, intLit.lexeme) }
+T → floatLit { igual, com float }</pre>
+    <div class="note warn">
+      <p><b>Detalhe do gabarito:</b> ele escreve T.str := "(" + E.str + ")" em T → ( E ). Como E → E₁ + T já parentiza, o resultado seria “(1 - ((3.5 + 2)))”. Para chegar à saída pedida, “(1 - (3.5 + 2)) = -4.5”, T → ( E ) só repassa.</p>
+      <p>A versão alternativa do gabarito imprime aos poucos: E → E₁ + { print(" + ") } T, T → ( { print("(") } E ) { print(")") } etc.</p>
+    </div>
+  </div>
+  <div data-w="interp"></div>
+</section>
+
+<section class="slide" id="q2-ex3" data-mod="q2" data-title="Lista 2 · Ex. 3: a(i) — função ou array?">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 3</div>
+    <h1>Resolver a ambiguidade de a(i) na análise semântica</h1>
+    <p class="lede">Em Fortran 77, <code>a(i)</code> pode ser chamada de função ou acesso a array. Em vez de o léxico consultar o sintático (como no typedef de C), o parser aceita a forma única e a análise semântica decide.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Como fazer</h3>
+      <ol>
+        <li>A gramática produz um nó genérico: <code>Start → name ( ExprList ) { Start.node := mkApply(name.lexeme, ExprList.nodes) }</code>.</li>
+        <li>Na análise semântica, <code>lookup(name)</code> na tabela de símbolos devolve a declaração.</li>
+        <li>Conforme o tipo da entrada (função, array, outro, inexistente), o nó é reescrito ou anotado e verificado.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Verificações</h3>
+      <ul>
+        <li><b>Função</b>: quantidade e tipos dos argumentos; tipo = retorno.</li>
+        <li><b>Array</b>: quantidade de índices = dimensões; índices inteiros; tipo = elemento.</li>
+        <li><b>Outro / não declarado</b>: reporta erro e continua.</li>
+      </ul>
+    </div>
+  </div>
+  <div data-w="applyNode"></div>
+</section>
+
+<section class="slide" id="q2-ex4" data-mod="q2" data-title="Lista 2 · Ex. 4 (a, b): pós-fixa e prefixa" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 4 (a) e (b)</div>
+    <h1>9 + 5 * 2 ⇒ “9 5 2 * +” e “+ 9 * 5 2”</h1>
+    <p class="lede">Dois atributos sintetizados de string. A única diferença é onde o operador entra na concatenação: no fim (pós-fixa) ou no começo (prefixa).</p>
+  </header>
+  <div class="tbl-wrap"><table class="t">
+    <thead><tr><th>Produção</th><th>Pós-fixa</th><th>Prefixa</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">E → E₁ + T</td><td class="mono">E.pos := fmt("%s %s +", E₁.pos, T.pos)</td><td class="mono">E.pre := fmt("+ %s %s", E₁.pre, T.pre)</td></tr>
+      <tr><td class="mono">E → T</td><td class="mono">E.pos := T.pos</td><td class="mono">E.pre := T.pre</td></tr>
+      <tr><td class="mono">T → T₁ * F</td><td class="mono">T.pos := fmt("%s %s *", T₁.pos, F.pos)</td><td class="mono">T.pre := fmt("* %s %s", T₁.pre, F.pre)</td></tr>
+      <tr><td class="mono">T → F</td><td class="mono">T.pos := F.pos</td><td class="mono">T.pre := F.pre</td></tr>
+      <tr><td class="mono">F → intLit</td><td class="mono">F.pos := intLit.lexeme</td><td class="mono">F.pre := intLit.lexeme</td></tr>
+    </tbody>
+  </table></div>
+  <p>A questão pede a árvore <b>concreta</b>: todos os não terminais aparecem (E, T, F). A multiplicação fica dentro do T à direita do +, e é por isso que “5 2 *” vira um bloco só.</p>
+  <div data-w="posPre"></div>
+</section>
+
+<section class="slide" id="q2-ex4c" data-mod="q2" data-title="Lista 2 · Ex. 4 (c): só com print">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 4 (c)</div>
+    <h1>Traduzir só com print(…), sem atributos: dá em um passe?</h1>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Pós-fixa: sim</h3>
+<pre class="grammar">E → E₁ + T  { print("+") }
+E → T       { }
+T → T₁ * F  { print("*") }
+T → F       { }
+F → intLit  { print(intLit.lexeme) }</pre>
+      <p>A ação fica no fim da produção e roda na redução, quando os operandos já foram impressos. É o que o quadro mostra.</p>
+    </div>
+    <div class="card">
+      <h3>Prefixa: não, em um passe</h3>
+<pre class="grammar">E → { print("+") } E₁ + T
+T → { print("*") } T₁ * F
+F → intLit { print(intLit.lexeme) }</pre>
+      <p>Para imprimir “+” antes do 9, o tradutor teria de saber, ao começar a ler <code>9</code>, que haverá um + mais adiante — e quantos operadores virão (9 ⇒ “9”; 9 * 5 ⇒ “* 9 5”; 9 + 5 * 2 ⇒ “+ 9 * 5 2”). Essa informação pode estar arbitrariamente longe.</p>
+      <p>Além disso a gramática tem recursão à esquerda (não serve para descendente); eliminar a recursão não resolve a antecipação. É o Exemplo 5.16 do Dragon Book.</p>
+      <p><b>Solução:</b> guardar a string em <code>.pre</code> (item b) ou montar a árvore e imprimir em pré-ordem depois.</p>
+    </div>
+  </div>
+  <h2>Pós-fixa com print durante o parsing</h2>
+  <div data-w="printScheme"></div>
+  <h2>Prefixa: árvore pronta + pré-ordem</h2>
+  <div data-w="preorder"></div>
+</section>
+
+<section class="slide" id="q2-escopo" data-mod="q2" data-title="Escopo e o let horizontal (Ex. 5)" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 2 · Escopo · Lista 2 · Exercício 5</div>
+    <h1>Um nó Let com quatro filhos</h1>
+    <p class="lede">Em vez de lets aninhados (um por declaração), o let “horizontal” vira um nó só: três declarações e a expressão final.</p>
+  </header>
+  <div class="cols">
+    <div>
+<pre class="code"><span class="kw">class</span> Main <span class="kw">inherits</span> IO {
+  z : String &lt;- "A";
+  main() : Object {
+    <span class="kw">let</span> x : Int &lt;- z,
+        y : Int &lt;- (<span class="kw">let</span> y : Int &lt;- 5 <span class="kw">in</span> y + w),
+        z : Int &lt;- 10
+    <span class="kw">in</span> out_string(x + y + z)
+  };
+};</pre>
+      <p class="stepinfo">Índices de explicação: z₀ é o atributo; x₁, y₁, z₁ são as variáveis do let externo; y₂ é o y do let interno.</p>
+    </div>
+    <div class="card">
+      <h3>Escopo estático (léxico)</h3>
+      <p>Um uso se refere à ligação mais próxima no <b>texto do programa</b>. (Escopo dinâmico usaria a ligação mais recente na execução.) COOL usa escopo estático.</p>
+      <h3>Regra de visibilidade do let</h3>
+      <p>As declarações são processadas da esquerda para a direita: o inicializador de cada uma é analisado <b>antes</b> de a variável existir; as anteriores já são visíveis.</p>
+      <p>Logo o <code>z</code> em <code>x : Int &lt;- z</code> é o atributo z₀ : String — o z local ainda não existe.</p>
+    </div>
+  </div>
+  <h2>A AST (formato do quadro)</h2>
+  <div data-w="coolAst"></div>
+  <p class="stepinfo">x + y + z é associativo à esquerda: Plus(Plus(x, y), z). A chamada sem receptor vira Call com receptor self.</p>
+</section>
+
+<section class="slide" id="q2-ex6" data-mod="q2" data-title="Lista 2 · Ex. 6: tabela de símbolos passo a passo" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 6</div>
+    <h1>Percorrendo a AST com uma pilha espaguete de tabelas</h1>
+    <p class="lede">Cada escopo é uma tabela com ponteiro para a anterior. O caminho de qualquer tabela até a raiz é uma pilha. lookup sobe por esse caminho; achou ⇒ grava <code>use</code> no nó; não achou ⇒ reporta e continua.</p>
+  </header>
+  <div data-w="scopeWalk"></div>
+</section>
+
+<section class="slide" id="q2-use" data-mod="q2" data-title="Por que guardar a entrada (use)?" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 2 · Lista 2 · Exercício 6 (responda)</div>
+    <h1>Por que anotar cada uso com a entrada da tabela?</h1>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Resposta</h3>
+      <p>Porque <b>o significado de um nome depende do ponto do programa</b>, e a tabela muda depois desse ponto. Gravar <code>use → entrada</code> no momento do lookup congela a ligação certa; as fases seguintes (tipos, geração de código) leem o tipo e o endereço direto da entrada, sem refazer buscas.</p>
+      <p>Sem isso, uma fase posterior que repetisse <code>lookup("z")</code> a partir da tabela do let — já com x₁, y₁ e z₁ inseridos — acharia <b>z₁ : Int</b> para o z do inicializador de x. O uso passaria a ser Int e o erro <b>String ≤ Int</b> desapareceria.</p>
+    </div>
+    <div class="card">
+      <h3>E a persistência?</h3>
+      <p>As tabelas não são apagadas no exit_scope: o <code>use</code> do y interno aponta para y₂, que mora em S_Let2. Se S_Let2 fosse descartada, o ponteiro ficaria pendurado.</p>
+      <p>Também é por isso que y₁ e y₂ são entradas diferentes, mesmo com o mesmo nome.</p>
+    </div>
+  </div>
+  <div data-w="useWhy"></div>
+</section>
+
+<section class="slide" id="q2-check" data-mod="q2" data-title="Checklist da Questão 2">
+  <header>
+    <div class="eyebrow">Questão 2 · Antes de entregar</div>
+    <h1>Checklist e armadilhas</h1>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Tradução dirigida por sintaxe</h3>
+      <ul>
+        <li>Diga quais atributos existem e se são sintetizados ou herdados.</li>
+        <li>Escreva uma ação por produção, inclusive as de repasse (E → T, T → F, T → ( E )).</li>
+        <li>No parser ascendente, as ações rodam nas reduções: mostre a árvore/valor crescendo de baixo para cima.</li>
+        <li>Pós-fixa com print no fim da produção funciona em um passe; prefixa com print no começo, não.</li>
+        <li>Conversão int/float: decida o tipo do resultado e converta os dois lados.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Escopo e tabela de símbolos</h3>
+      <ul>
+        <li>enter_scope em classe, método e let; exit_scope no fim, sem apagar a tabela.</li>
+        <li>No let: analise o inicializador <b>antes</b> de inserir a variável.</li>
+        <li>lookup sobe pelos pais; o primeiro que achar vence (sombreamento).</li>
+        <li>Não achou: reporte e continue.</li>
+        <li>Anote use → entrada em cada nó Object.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= Q3 ======================= -->
+<section class="slide" id="q3-notacao" data-mod="q3" data-title="Lendo O, M, C ⊢ e : T">
+  <header>
+    <div class="eyebrow">Questão 3 · Inferência de tipos</div>
+    <h1>Como ler uma regra de inferência</h1>
+    <p class="lede">Premissas em cima, conclusão embaixo: se tudo acima da linha vale, vale o que está abaixo. É a mesma forma de “p → q, q → r ∴ p → r”.</p>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Os ambientes de COOL</h3>
+      <ul>
+        <li><b>O</b> (objetos): O(x) = T diz que, no ambiente O, o identificador x tem tipo T.</li>
+        <li><b>M</b> (métodos): M(C, m) = (T₁, …, Tₙ, T_R) diz que a classe C tem m(x₁ : T₁, …, xₙ : Tₙ) : T_R.</li>
+        <li><b>C</b>: a classe atual (para SELF_TYPE).</li>
+        <li><b>O[T/x]</b>: O com x atualizado para o tipo T (esconde um x anterior).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Contexto e julgamento</h3>
+      <p class="mono" style="font-size:1.05rem">O, M, C ⊢ e : T</p>
+      <p>“No contexto O, M, C, a expressão e tem tipo T.” O, M, C é o <b>contexto</b>; <code>e : T</code> é o <b>julgamento</b>.</p>
+      <div data-w="rule" data-prem="O(x) = T" data-conc="O,M,C ⊢ x : T" data-name="Var"></div>
+      <div data-w="rule" data-prem="⊢ e₁ : Int||⊢ e₂ : Float" data-conc="⊢ e₁ + e₂ : Float" data-name="do caderno"></div>
+    </div>
+  </div>
+  <div class="note"><p><b>Como usar na prova:</b> escreva a regra do nó principal com os tipos desconhecidos como incógnitas (T₁′, T₂′…). Depois visite os filhos, descubra cada tipo e preencha as premissas. É o movimento do gabarito do Ex. 7.</p></div>
+</section>
+
+<section class="slide" id="q3-subtipo" data-mod="q3" data-title="Subtipos ≤ e join ⊔">
+  <header>
+    <div class="eyebrow">Questão 3 · Subtipagem</div>
+    <h1>A ≤ B é uma ordem parcial; A ⊔ B é o menor tipo acima dos dois</h1>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>≤ (do quadro)</h3>
+      <ul>
+        <li>A ≤ A para todo tipo A (reflexividade).</li>
+        <li>Se B herda de A, então B ≤ A.</li>
+        <li>Se A ≤ B e B ≤ C, então A ≤ C (transitividade).</li>
+        <li>SELF_TYPE em C: se C ≤ D, então SELF_TYPE_C ≤ D.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>⊔ (join, menor limitante superior)</h3>
+      <p>A ⊔ B = C se, e somente se:</p>
+      <ul>
+        <li>A ≤ C e B ≤ C (C é limitante superior);</li>
+        <li>para todo D, (A ≤ D ∧ B ≤ D) ⇒ C ≤ D (é o menor).</li>
+      </ul>
+      <p>SELF_TYPE_C ⊔ A = C ⊔ A. Usado no <code>if</code>: o tipo é T₁ ⊔ T₂.</p>
+    </div>
+  </div>
+  <div data-w="joinCalc"></div>
+</section>
+
+<section class="slide" id="q3-regras" data-mod="q3" data-title="As regras do quadro">
+  <header>
+    <div class="eyebrow">Questão 3 · Referência</div>
+    <h1>As regras de inferência vistas em aula</h1>
+  </header>
+  <div class="rulecards">
+    <div class="rulecard"><h4>Literais</h4><div data-w="rule" data-prem="i é um literal inteiro" data-conc="O,M,C ⊢ i : Int" data-name="Int"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ true : Bool" data-name="True"></div><div data-w="rule" data-prem="" data-conc="O,M,C ⊢ false : Bool" data-name="False"></div></div>
+    <div class="rulecard"><h4>Variável</h4><div data-w="rule" data-prem="O(x) = T" data-conc="O,M,C ⊢ x : T" data-name="Var"></div><p>x sem declaração: erro; na recuperação, x : NoType.</p></div>
+    <div class="rulecard"><h4>Aritmética</h4><div data-w="rule" data-prem="op ∈ {+, −, *, /}||O,M,C ⊢ e₀ : Int||O,M,C ⊢ e₁ : Int" data-conc="O,M,C ⊢ e₀ op e₁ : Int" data-name="Arit."></div>
+<pre class="code" style="font-size:.78rem">typeCheck(e₀ op e₁)
+  t₀ := typeCheck(e₀)
+  t₁ := typeCheck(e₁)
+  se t₀ = Int e t₁ = Int: retorne Int
+  senão: retorne ERRO</pre></div>
+    <div class="rulecard"><h4>New</h4><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀" data-conc="O,M,C ⊢ new T₀ : T₁" data-name="New"></div></div>
+    <div class="rulecard"><h4>If</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : Bool||O,M,C ⊢ e₁ : T₁||O,M,C ⊢ e₂ : T₂" data-conc="O,M,C ⊢ if e₀ then e₁ else e₂ fi : T₁ ⊔ T₂" data-name="If"></div></div>
+    <div class="rulecard"><h4>Let sem inicialização</h4><div data-w="rule" data-prem="O[T₀/x],M,C ⊢ e : T₁" data-conc="O,M,C ⊢ let x : T₀ in e : T₁" data-name="Let"></div><p>O[t/y]: atualiza o tipo associado a y no ambiente O para t.</p></div>
+    <div class="rulecard"><h4>Let com inicialização</h4><div data-w="rule" data-prem="T₁ = SELF_TYPE_C se T₀ = SELF_TYPE, senão T₀||O,M,C ⊢ e₀ : T₂||T₂ ≤ T₁||O[T₁/x],M,C ⊢ e₁ : T₃" data-conc="O,M,C ⊢ let x : T₀ &lt;- e₀ in e₁ : T₃" data-name="Let-init"></div><p>e₀ é tipado em O (sem x); e₁ em O[T₁/x]. Exemplo do quadro: let x : A &lt;- new B vale porque B ≤ A.</p>
+<pre class="code" style="font-size:.78rem">type-check(let x : t₀ &lt;- e₀ in e₁)
+  t₁ := SELF_TYPE(C) se t₀ = SELF_TYPE senão t₀
+  t₂ := type-check(e₀)
+  se não (t₂ ≤ t₁): reporte "tipo de e₀ …"
+  atualize a tabela com o tipo de x
+  retorne type-check(e₁)</pre></div>
+    <div class="rulecard"><h4>Despacho dinâmico</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||O,M,C ⊢ e₁ : T₁ … O,M,C ⊢ eₙ : Tₙ||M(T₀, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||T₁ ≤ T₁′ … Tₙ ≤ Tₙ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Despacho"></div><p>Se T₀ = SELF_TYPE_C, procura m em C. Sem receptor, e₀ é self.</p></div>
+    <div class="rulecard"><h4>Despacho estático</h4><div data-w="rule" data-prem="O,M,C ⊢ e₀ : T₀||T₀ ≤ T||O,M,C ⊢ eᵢ : Tᵢ||M(T, m) = (T₁′, …, Tₙ′, T<sub>R</sub>′)||Tᵢ ≤ Tᵢ′||T<sub>R</sub> = T₀ se T<sub>R</sub>′ = SELF_TYPE, senão T<sub>R</sub>′" data-conc="O,M,C ⊢ e₀@T.m(e₁, …, eₙ) : T<sub>R</sub>" data-name="Estático"></div><p>x@A.f() usa o f de A mesmo que x seja um B.</p></div>
+  </div>
+</section>
+
+<section class="slide" id="q3-letn" data-mod="q3" data-title="Let com várias declarações (Ex. 7)" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 3 · Lista 2 · Exercício 7</div>
+    <h1>A regra do let horizontal, com os índices certos</h1>
+    <p class="lede">Cada inicializador é tipado no ambiente produzido pelas declarações anteriores; depois o ambiente ganha a nova variável com o tipo <b>declarado</b>.</p>
+  </header>
+  <div class="panel">
+    <p class="mono">O₁ = O  ·  O<sub>i+1</sub> = Oᵢ[Tᵢ/xᵢ]  para 1 ≤ i ≤ n</p>
+    <div data-w="rule" data-prem="Oᵢ,M,C ⊢ eᵢ : Tᵢ′    Tᵢ′ ≤ Tᵢ    (1 ≤ i ≤ n)||O<sub>n+1</sub>,M,C ⊢ e<sub>n+1</sub> : T<sub>n+1</sub>" data-conc="O,M,C ⊢ let x₁ : T₁ &lt;- e₁, …, xₙ : Tₙ &lt;- eₙ in e<sub>n+1</sub> : T<sub>n+1</sub>" data-name="Let-n"></div>
+    <p class="stepinfo">Assim e₁ é visto em O₁ = O (sem x₁), e₂ em O₂ (com x₁), …, e o corpo em O<sub>n+1</sub> (com todos). É exatamente a numeração do exemplo do gabarito: O₁ ⊢ z, O₂ ⊢ (let y …), O₃ ⊢ 10, O₄ ⊢ out_string(…). A fórmula geral do gabarito escreve Oᵢ = Oᵢ₋₁[Tᵢ/xᵢ] com Oᵢ ⊢ eᵢ, o que colocaria xᵢ no próprio inicializador.</p>
+  </div>
+  <div class="cols">
+    <div class="card">
+      <h3>Procedimento</h3>
+      <ol>
+        <li>Descubra o tipo Tᵢ′ do inicializador eᵢ no ambiente Oᵢ.</li>
+        <li>Verifique Tᵢ′ ≤ Tᵢ.</li>
+        <li>Acrescente xᵢ : Tᵢ ao ambiente (O<sub>i+1</sub>).</li>
+        <li>Repita; por fim, o tipo do corpo é o tipo do let.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Reportar e prosseguir</h3>
+      <ul>
+        <li>Tᵢ′ ≤ Tᵢ falhou: reporte e continue com O<sub>i+1</sub> = Oᵢ[Tᵢ/xᵢ] (o tipo declarado).</li>
+        <li>Identificador não declarado: reporte e dê NoType ao nó.</li>
+        <li>Qualquer operação com NoType resulta em NoType.</li>
+        <li>NoType ≤ T para todo T: nenhum erro em cascata por causa de um erro já reportado.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="q3-erros" data-mod="q3" data-title="Ex. 7 com erros: passo a passo" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 3 · Lista 2 · Exercício 7 (código do Ex. 5)</div>
+    <h1>Preenchendo as incógnitas T₁′, T₂′, T₃′, T₄</h1>
+    <p class="lede">Ambiente inicial: O tem z : String (o atributo); M tem out_string herdado de IO. Avance e veja a regra se completar e os erros aparecerem sem interromper a análise.</p>
+  </header>
+  <div data-w="typeErr"></div>
+</section>
+
+<section class="slide" id="q3-ok" data-mod="q3" data-title="Ex. 7 sem erros: derivação completa" data-key="1">
+  <header>
+    <div class="eyebrow">Questão 3 · Lista 2 · Exercício 7 (exemplo sem erros)</div>
+    <h1>O exemplo sem erros, premissa por premissa</h1>
+    <p class="lede"><code>let x : Int &lt;- 10, y : Int &lt;- (let y : Int &lt;- 5 in y + 5), z : Int &lt;- 10 in out_int(x + y + z)</code>. A mesma regra, agora com todas as premissas satisfeitas; o tipo final vem da assinatura de out_int.</p>
+  </header>
+  <div data-w="typeOk"></div>
+  <div class="note"><p>out_int(x : Int) : SELF_TYPE imprime e devolve self. Chamado em Main sem receptor, o receptor é self : SELF_TYPE_Main, então a chamada — e o let inteiro — tem tipo SELF_TYPE_Main, que é ≤ Object (tipo de retorno de main).</p></div>
+</section>
+
+<section class="slide" id="q3-check" data-mod="q3" data-title="Checklist da Questão 3">
+  <header>
+    <div class="eyebrow">Questão 3 · Antes de entregar</div>
+    <h1>Modelo de resposta e armadilhas</h1>
+  </header>
+  <div class="cols">
+    <div class="card">
+      <h3>Modelo</h3>
+      <ol>
+        <li>Escreva a regra do nó raiz com incógnitas.</li>
+        <li>Liste os ambientes: O₁ = O, O₂ = O₁[T₁/x₁], …</li>
+        <li>Visite os filhos da esquerda para a direita, cada um no seu ambiente, aplicando Var, Int, Aritmética, Let, Despacho…</li>
+        <li>Verifique cada ≤; se falhar, reporte e siga com o tipo declarado.</li>
+        <li>Conclua com o tipo do corpo (ou do retorno do método).</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Armadilhas</h3>
+      <ul>
+        <li>Tipar eᵢ com xᵢ já no ambiente.</li>
+        <li>Achar que o z local já vale no inicializador de x.</li>
+        <li>Inverter o ≤: o tipo encontrado deve ser subtipo do declarado (T′ ≤ T).</li>
+        <li>Esquecer que out_string/out_int retornam SELF_TYPE.</li>
+        <li>Parar a análise no primeiro erro: a prova pede reportar e continuar.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= TREINO ======================= -->
+<section class="slide" id="treino" data-mod="fim" data-title="Perguntas rápidas">
+  <header>
+    <div class="eyebrow">Treino final</div>
+    <h1>Doze perguntas para testar antes da prova</h1>
+    <p class="lede">Responda de cabeça e depois abra a resposta.</p>
+  </header>
+  <div class="flash">
+    <details><summary>Q1 · Em CC₆ do Ex. 2 há [A → B C •, a] e [A → B C • f, a]. Há conflito?</summary><div>Não. r2 vai para a coluna a; s8 vai para a coluna f. Células diferentes.</div></details>
+    <details><summary>Q1 · Por que o Ex. 2 não é LR(0)?</summary><div>O LR(0) põe r2 em todas as colunas de CC₆, inclusive f, onde já há s8: shift/reduce. O SLR resolve, porque FOLLOW(A) = {a}.</div></details>
+    <details><summary>Q1 · Pilha (⊥,0)(B,3)(C,6)(f,8), entrada “a eof”, ação r3. O que acontece?</summary><div>A → B C f tem 3 símbolos: desempilha 3 pares; topo exposto é 0; Goto[0, A] = 2; empilha (A,2). A entrada continua “a eof”.</div></details>
+    <details><summary>Q1 · Qual o lookahead de [B → • b] em CC₀ do Ex. 2?</summary><div>c. Vem de [A → • B C, a] e [A → • B C f, a]: FIRST(C a) = FIRST(C f a) = {c}.</div></details>
+    <details><summary>Q1 · Quando a fusão LALR cria conflito?</summary><div>Só reduce/reduce: dois estados LR(1) de mesmo núcleo cujos lookaheads, unidos, põem duas reduções na mesma coluna. Shift/reduce novo nunca aparece.</div></details>
+    <details><summary>Q1 · Por que o Cmd do quadro não é SLR?</summary><div>CC₂ tem Cmd → Lhs • = Rhs e Rhs → Lhs •. FOLLOW(Rhs) contém “=” (por Lhs → * Rhs e Cmd → Lhs = Rhs), então r5 cai na coluna “=” junto com s6. No LR(1) o item tem lookahead eof.</div></details>
+    <details><summary>Q2 · List.pos no número binário é herdado ou sintetizado?</summary><div>Herdado: vem do pai (List₁.pos := List.pos + 1; Bit.pos := List.pos).</div></details>
+    <details><summary>Q2 · Por que T → ( E ) não cria nó na AST?</summary><div>Parênteses só agrupam. A forma da árvore já guarda a precedência; a ação só repassa E.node.</div></details>
+    <details><summary>Q2 · Em let x : Int &lt;- z, …, z : Int &lt;- 10 in …, qual z o inicializador de x usa?</summary><div>O atributo z₀ : String. O z local só é inserido depois. Daí o erro String ≤ Int.</div></details>
+    <details><summary>Q3 · O que é O[T/x]?</summary><div>O ambiente O com x associado ao tipo T (esconde uma ligação anterior de x).</div></details>
+    <details><summary>Q3 · B e C herdam de A; D herda de B. Tipo de if c then new D else new C fi?</summary><div>D ⊔ C = A.</div></details>
+    <details><summary>Q3 · Tipo de out_int(e) chamado dentro de Main, sem receptor?</summary><div>SELF_TYPE_Main: a assinatura é out_int(Int) : SELF_TYPE, e o receptor implícito é self.</div></details>
+  </div>
+</section>
+
+<div class="pager">
+  <a id="prev" class="prev" href="#"><small>← Anterior</small><span></span></a>
+  <a id="next" class="next" href="#"><small>Próximo →</small><span></span></a>
+</div>
+</main>
+</div>
+<nav class="mobnav" aria-label="Navegação">
+  <button class="btn" id="mprev" type="button">← Anterior</button>
+  <button class="btn primary" id="mnext" type="button">Próximo →</button>
+</nav>
+
+<script>
+/* Motor LR: gramática → FIRST/FOLLOW → coleções LR(0)/LR(1) → LALR → tabela Ações/Goto → execução com pilha.
+   Tudo o que a apresentação mostra sobre autômatos e tabelas sai daqui (nada é digitado à mão). */
+const LR = (() => {
+  const EOF = 'eof';
+  const EPS = 'ε';
+
+  function splitRhs(s) {
+    const t = s.trim();
+    if (t === '' || t === EPS || t === 'eps') return [];
+    return t.split(/\s+/).filter((x) => x !== EPS);
+  }
+
+  /* Formato: "A -> α | β" (ou →). Linhas iniciadas por "|" continuam a produção anterior. */
+  function parseGrammar(text, opts = {}) {
+    const lines = text.split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const raw = [];
+    let cur = null;
+    for (const line of lines) {
+      const m = line.match(/^(\S+)\s*(?:->|→|::=)\s*(.*)$/);
+      let lhs, rest;
+      if (m) { lhs = m[1]; rest = m[2]; cur = lhs; }
+      else if (line.startsWith('|') && cur) { lhs = cur; rest = line.slice(1); }
+      else throw new Error(`Não entendi a linha "${line}". Use o formato  A -> x y | z`);
+      for (const alt of rest.split('|')) raw.push({ lhs, rhs: splitRhs(alt) });
+    }
+    if (!raw.length) throw new Error('A gramática está vazia.');
+
+    const lhsSet = new Set(raw.map((p) => p.lhs));
+    const first = raw[0];
+    const firstCount = raw.filter((p) => p.lhs === first.lhs).length;
+    const usedOnRhs = raw.some((p) => p.rhs.includes(first.lhs));
+    const looksAugmented = firstCount === 1 && first.rhs.length === 1 && lhsSet.has(first.rhs[0]) && !usedOnRhs;
+    const augmented = opts.augmented ?? looksAugmented;
+
+    let prods;
+    if (augmented) {
+      prods = raw;
+    } else {
+      let name = opts.startName || (lhsSet.has('Start') ? 'Goal' : 'Start');
+      while (lhsSet.has(name)) name += "'";
+      prods = [{ lhs: name, rhs: [first.lhs] }, ...raw];
+    }
+    prods = prods.map((p, idx) => ({ ...p, idx }));
+
+    const nonterms = [];
+    for (const p of prods) if (!nonterms.includes(p.lhs)) nonterms.push(p.lhs);
+    let terms = [];
+    for (const p of prods) for (const s of p.rhs) if (!nonterms.includes(s) && !terms.includes(s)) terms.push(s);
+    if (opts.termOrder) {
+      const extra = terms.filter((t) => !opts.termOrder.includes(t));
+      terms = [...opts.termOrder.filter((t) => terms.includes(t)), ...extra];
+    }
+    terms.push(EOF);
+
+    const G = {
+      prods, nonterms, terms, start: prods[0].lhs, origStart: prods[0].rhs[0],
+      isNT: (s) => nonterms.includes(s),
+      prodsOf: {},
+    };
+    for (const nt of nonterms) G.prodsOf[nt] = prods.filter((p) => p.lhs === nt);
+    computeFirstFollow(G);
+    return G;
+  }
+
+  function computeFirstFollow(G) {
+    const FIRST = {};
+    for (const t of G.terms) FIRST[t] = new Set([t]);
+    for (const nt of G.nonterms) FIRST[nt] = new Set();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const p of G.prods) {
+        const f = firstOfSeq(G, p.rhs, FIRST);
+        for (const x of f) if (!FIRST[p.lhs].has(x)) { FIRST[p.lhs].add(x); changed = true; }
+      }
+    }
+    G.FIRST = FIRST;
+    const FOLLOW = {};
+    for (const nt of G.nonterms) FOLLOW[nt] = new Set();
+    FOLLOW[G.start].add(EOF);
+    changed = true;
+    while (changed) {
+      changed = false;
+      for (const p of G.prods) {
+        p.rhs.forEach((s, i) => {
+          if (!G.isNT(s)) return;
+          const f = firstOfSeq(G, p.rhs.slice(i + 1));
+          for (const x of f) {
+            if (x === EPS) continue;
+            if (!FOLLOW[s].has(x)) { FOLLOW[s].add(x); changed = true; }
+          }
+          if (f.has(EPS)) for (const x of FOLLOW[p.lhs]) if (!FOLLOW[s].has(x)) { FOLLOW[s].add(x); changed = true; }
+        });
+      }
+    }
+    G.FOLLOW = FOLLOW;
+  }
+
+  /* FIRST de uma sequência; contém ε quando a sequência inteira pode sumir. */
+  function firstOfSeq(G, seq, FIRST = G.FIRST) {
+    const out = new Set();
+    for (const s of seq) {
+      const f = FIRST[s] || new Set([s]);
+      for (const x of f) if (x !== EPS) out.add(x);
+      if (!f.has(EPS)) return out;
+    }
+    out.add(EPS);
+    return out;
+  }
+
+  const sortBy = (order) => (a, b) => order.indexOf(a) - order.indexOf(b);
+
+  function itemKey(it) { return it.la == null ? `${it.p}.${it.d}` : `${it.p}.${it.d}.${it.la}`; }
+  function coreKey(it) { return `${it.p}.${it.d}`; }
+
+  /* closure com o registro de "por que" cada item entrou (para a explicação passo a passo). */
+  function closure(G, kernel, withLA) {
+    const items = kernel.map((it) => ({ ...it, kernel: true }));
+    const seen = new Set(items.map(itemKey));
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const rhs = G.prods[it.p].rhs;
+      const Y = rhs[it.d];
+      if (Y === undefined || !G.isNT(Y)) continue;
+      const beta = rhs.slice(it.d + 1);
+      let las = [null];
+      if (withLA) {
+        const f = firstOfSeq(G, [...beta, it.la]);
+        las = [...f].filter((x) => x !== EPS).sort(sortBy(G.terms));
+      }
+      for (const q of G.prodsOf[Y]) {
+        for (const la of las) {
+          const n = { p: q.idx, d: 0, la, kernel: false, from: { item: it, beta, las } };
+          const k = itemKey(n);
+          if (!seen.has(k)) { seen.add(k); items.push(n); }
+        }
+      }
+    }
+    return items;
+  }
+
+  function nextSymbols(G, items) {
+    const out = [];
+    for (const it of items) {
+      const X = G.prods[it.p].rhs[it.d];
+      if (X !== undefined && !out.includes(X)) out.push(X);
+    }
+    return out;
+  }
+
+  function gotoKernel(G, items, X) {
+    const k = [];
+    const seen = new Set();
+    for (const it of items) {
+      if (G.prods[it.p].rhs[it.d] === X) {
+        const n = { p: it.p, d: it.d + 1, la: it.la };
+        const key = itemKey(n);
+        if (!seen.has(key)) { seen.add(key); k.push(n); }
+      }
+    }
+    return k;
+  }
+
+  const kernelKey = (kernel) => kernel.map(itemKey).sort().join('|');
+
+  /* Coleção canônica por busca em largura: estados numerados na ordem em que aparecem. */
+  function buildCollection(G, kind, opts = {}) {
+    const withLA = kind === 'lr1';
+    const k0 = [{ p: 0, d: 0, la: withLA ? EOF : null }];
+    const states = [{ kernel: k0, items: closure(G, k0, withLA), via: null }];
+    const byKey = new Map([[kernelKey(k0), 0]]);
+    const trans = [{}];
+    const log = [{ type: 'init', state: 0 }];
+    for (let i = 0; i < states.length; i++) {
+      for (const X of nextSymbols(G, states[i].items)) {
+        const kernel = gotoKernel(G, states[i].items, X);
+        const key = kernelKey(kernel);
+        let j = byKey.get(key);
+        const isNew = j === undefined;
+        if (isNew) {
+          j = states.length;
+          byKey.set(key, j);
+          states.push({ kernel, items: closure(G, kernel, withLA), via: { from: i, sym: X } });
+          trans.push({});
+        }
+        trans[i][X] = j;
+        log.push({ type: 'goto', from: i, sym: X, to: j, isNew });
+      }
+    }
+    let C = { G, kind, states, trans, log };
+    if (opts.statePaths) C = renumber(C, opts.statePaths);
+    return C;
+  }
+
+  /* Renumera os estados para coincidir com a numeração usada em aula (caminhos a partir de CC0). */
+  function renumber(C, paths) {
+    const order = [];
+    for (const path of paths) {
+      let s = 0;
+      for (const X of splitRhs(path)) {
+        s = C.trans[s][X];
+        if (s === undefined) throw new Error(`Caminho inválido: ${path}`);
+      }
+      if (!order.includes(s)) order.push(s);
+    }
+    C.states.forEach((_, i) => { if (!order.includes(i)) order.push(i); });
+    const map = {};
+    order.forEach((old, nw) => { map[old] = nw; });
+    const states = order.map((old) => {
+      const st = C.states[old];
+      return { ...st, via: st.via ? { from: map[st.via.from], sym: st.via.sym } : null };
+    });
+    const trans = order.map((old) => {
+      const t = {};
+      for (const [X, j] of Object.entries(C.trans[old])) t[X] = map[j];
+      return t;
+    });
+    const created = new Set([0]);
+    const log = C.log.map((e) => {
+      if (e.type !== 'goto') return e;
+      const to = map[e.to];
+      const isNew = !created.has(to);
+      created.add(to);
+      return { ...e, from: map[e.from], to, isNew };
+    });
+    return { ...C, states, trans, log };
+  }
+
+  /* LALR: funde estados LR(1) com o mesmo núcleo LR(0). */
+  function mergeLALR(C1) {
+    const coreOf = (st) => st.items.map(coreKey).filter((v, i, a) => a.indexOf(v) === i).sort().join('|');
+    const groups = [];
+    const groupOf = [];
+    const byCore = new Map();
+    C1.states.forEach((st, i) => {
+      const k = coreOf(st);
+      if (!byCore.has(k)) { byCore.set(k, groups.length); groups.push([]); }
+      const g = byCore.get(k);
+      groups[g].push(i);
+      groupOf[i] = g;
+    });
+    const states = groups.map((members) => {
+      const items = [];
+      const seen = new Set();
+      for (const m of members) for (const it of C1.states[m].items) {
+        const key = itemKey(it);
+        if (!seen.has(key)) { seen.add(key); items.push(it); }
+      }
+      return { kernel: items.filter((i) => i.kernel), items, members, via: null };
+    });
+    const trans = groups.map((members) => {
+      const t = {};
+      for (const [X, j] of Object.entries(C1.trans[members[0]])) t[X] = groupOf[j];
+      return t;
+    });
+    const label = (g) => groups[g].join('/');
+    return { G: C1.G, kind: 'lalr', states, trans, groups, groupOf, label, log: [] };
+  }
+
+  function stateLabel(C, i) { return C.label ? C.label(i) : String(i); }
+
+  /* Tabela Ações/Goto. method: lr0 | slr | lr1 | lalr. Cada célula guarda as ações e o motivo. */
+  function buildTable(C, method) {
+    const G = C.G;
+    const action = C.states.map(() => ({}));
+    const go = C.states.map(() => ({}));
+    const add = (s, t, entry) => {
+      const cell = (action[s][t] ||= []);
+      const same = cell.find((e) => e.type === entry.type && e.n === entry.n);
+      if (same) same.why.push(...entry.why);
+      else cell.push(entry);
+    };
+    C.states.forEach((st, s) => {
+      for (const [X, j] of Object.entries(C.trans[s])) {
+        if (G.isNT(X)) go[s][X] = j;
+      }
+      for (const it of st.items) {
+        const p = G.prods[it.p];
+        const X = p.rhs[it.d];
+        if (X !== undefined) {
+          if (!G.isNT(X)) add(s, X, { type: 's', n: C.trans[s][X], why: [it] });
+          continue;
+        }
+        if (it.p === 0) { add(s, EOF, { type: 'acc', why: [it] }); continue; }
+        let las;
+        if (method === 'lr0') las = G.terms;
+        else if (method === 'slr') las = [...G.FOLLOW[p.lhs]];
+        else las = [it.la];
+        for (const t of las) add(s, t, { type: 'r', n: it.p, why: [it] });
+      }
+    });
+    const conflicts = [];
+    action.forEach((row, s) => {
+      for (const t of G.terms) {
+        const cell = row[t];
+        if (cell && cell.length > 1) {
+          const kinds = cell.map((e) => (e.type === 'r' ? 'reduce' : 'shift'));
+          const type = kinds.every((k) => k === 'reduce') ? 'reduce/reduce' : 'shift/reduce';
+          conflicts.push({ state: s, term: t, type, entries: cell });
+        }
+      }
+    });
+    return { C, G, method, action, go, conflicts };
+  }
+
+  function actionText(e, C) {
+    if (e.type === 'acc') return 'acc';
+    if (e.type === 's') return 's' + stateLabel(C, e.n);
+    return 'r' + e.n;
+  }
+
+  /* Executa o parser. hooks.shift(tok) e hooks.reduce(prod, vals) produzem atributos (tradução dirigida). */
+  function run(T, tokens, hooks = {}) {
+    const { C, G } = T;
+    const input = [...tokens.map((t) => (typeof t === 'string' ? { sym: t, text: t } : t)), { sym: EOF, text: EOF }];
+    const stack = [{ sym: '⊥', state: 0, val: undefined }];
+    const steps = [];
+    let pos = 0;
+    for (let guard = 0; guard < 10000; guard++) {
+      const s = stack[stack.length - 1].state;
+      const tok = input[pos];
+      const cell = (T.action[s] || {})[tok.sym];
+      const snap = { stack: stack.map((e) => ({ ...e })), input: input.slice(pos), pos };
+      if (!cell || !cell.length) {
+        steps.push({ ...snap, kind: 'err', text: 'erro', note: `nenhuma ação em [${stateLabel(C, s)}, ${tok.sym}]` });
+        return { steps, ok: false };
+      }
+      const e = cell[0];
+      const conflict = cell.length > 1;
+      if (e.type === 'acc') {
+        steps.push({ ...snap, kind: 'acc', text: 'aceita', conflict });
+        return { steps, ok: true, value: stack[stack.length - 1].val };
+      }
+      if (e.type === 's') {
+        steps.push({ ...snap, kind: 's', text: actionText(e, C), target: e.n, token: tok, conflict });
+        const val = hooks.shift ? hooks.shift(tok) : tok.text;
+        stack.push({ sym: tok.sym, state: e.n, val, text: tok.text });
+        pos++;
+        continue;
+      }
+      const p = G.prods[e.n];
+      const k = p.rhs.length;
+      const popped = stack.splice(stack.length - k, k);
+      const exposed = stack[stack.length - 1].state;
+      const target = T.go[exposed][p.lhs];
+      const val = hooks.reduce ? hooks.reduce(p, popped.map((x) => x.val), popped) : undefined;
+      steps.push({ ...snap, kind: 'r', text: actionText(e, C), prod: p, popped: k, exposed, target, conflict, val });
+      if (target === undefined) {
+        steps.push({ stack: stack.map((x) => ({ ...x })), input: input.slice(pos), pos, kind: 'err', text: 'erro', note: `goto(${exposed}, ${p.lhs}) indefinido` });
+        return { steps, ok: false };
+      }
+      stack.push({ sym: p.lhs, state: target, val });
+    }
+    return { steps, ok: false };
+  }
+
+  function prodText(G, p, dot = -1) {
+    const rhs = [...p.rhs];
+    if (dot >= 0) rhs.splice(dot, 0, '•');
+    return `${p.lhs} → ${rhs.length ? rhs.join(' ') : 'ε'}`;
+  }
+
+  /* Agrupa itens LR(1) de mesmo núcleo: [A → α•β, {a, b}] */
+  function groupItems(C, items) {
+    const G = C.G;
+    const out = [];
+    const byCore = new Map();
+    for (const it of items) {
+      const k = coreKey(it);
+      if (!byCore.has(k)) {
+        const g = { p: it.p, d: it.d, las: [], kernel: it.kernel, text: prodText(G, G.prods[it.p], it.d) };
+        byCore.set(k, g);
+        out.push(g);
+      }
+      const g = byCore.get(k);
+      if (it.la != null && !g.las.includes(it.la)) g.las.push(it.la);
+    }
+    for (const g of out) g.las.sort(sortBy(G.terms));
+    return out;
+  }
+
+  function itemText(C, g) {
+    if (!g.las.length) return g.text;
+    const la = g.las.length === 1 ? g.las[0] : `{${g.las.join(', ')}}`;
+    return `[${g.text}, ${la}]`;
+  }
+
+  return {
+    EOF, EPS, parseGrammar, firstOfSeq, buildCollection, mergeLALR, buildTable, run,
+    prodText, groupItems, itemText, stateLabel, actionText, splitRhs, closure, gotoKernel, itemKey,
+  };
+})();
+if (typeof module !== 'undefined') module.exports = LR;
+
+</script>
+<script>
+/* ===================== utilidades ===================== */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SVGNS = 'http://www.w3.org/2000/svg';
+let uid = 0;
+const nextId = (p = 'id') => `${p}${++uid}`;
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : document.createTextNode(c));
+  return e;
+}
+function sv(tag, attrs = {}, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v);
+  for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : document.createTextNode(c));
+  return e;
+}
+const CH = 7.25; // largura de um caractere monoespaçado a 12px
+
+/* Controles de passo a passo reutilizados por todos os simuladores. */
+function makeStepper(host, count, render, opts = {}) {
+  if (count <= 0) { host.append(el('p', { class: 'stepinfo' }, 'Nada para mostrar.')); return { go() {}, k: 0, stop() {} }; }
+  let k = opts.start ?? 0;
+  let timer = null;
+  const info = el('span', { class: 'stepinfo' });
+  const first = el('button', { class: 'btn', type: 'button', title: 'Início', 'aria-label': 'Voltar ao início' }, '⏮');
+  const prev = el('button', { class: 'btn', type: 'button', 'aria-label': 'Passo anterior' }, '◀ Voltar');
+  const next = el('button', { class: 'btn primary', type: 'button', 'aria-label': 'Próximo passo' }, 'Avançar ▶');
+  const last = el('button', { class: 'btn', type: 'button', title: 'Fim', 'aria-label': 'Ir ao fim' }, '⏭');
+  const play = el('button', { class: 'btn', type: 'button' }, '▷ Animar');
+  const bar = el('div', { class: 'toolbar' }, first, prev, next, last, play, info);
+  host.append(bar);
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; play.textContent = '▷ Animar'; } };
+  const go = (i) => {
+    k = Math.max(0, Math.min(count - 1, i));
+    info.textContent = `passo ${k + 1} de ${count}`;
+    first.disabled = prev.disabled = k === 0;
+    next.disabled = last.disabled = k === count - 1;
+    render(k);
+  };
+  first.onclick = () => { stop(); go(0); };
+  prev.onclick = () => { stop(); go(k - 1); };
+  next.onclick = () => { stop(); go(k + 1); };
+  last.onclick = () => { stop(); go(count - 1); };
+  play.onclick = () => {
+    if (timer) return stop();
+    if (k === count - 1) go(0);
+    play.textContent = '❚❚ Pausar';
+    timer = setInterval(() => { if (k >= count - 1) stop(); else go(k + 1); }, opts.ms || 1100);
+  };
+  go(k);
+  return { go, get k() { return k; }, stop };
+}
+
+function seg(options, value, onChange) {
+  const wrap = el('div', { class: 'seg', role: 'group' });
+  const btns = options.map(([v, label]) => {
+    const b = el('button', { type: 'button', 'aria-pressed': String(v === value) }, label);
+    b.onclick = () => { btns.forEach((x) => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); onChange(v); };
+    wrap.append(b);
+    return b;
+  });
+  return wrap;
+}
+
+/* Centraliza no quadro rolável o nó em foco (estado atual, nó novo ou visitado). */
+function scrollToFocus(box) {
+  const f = box.querySelector('.tn.focus, .tn.new, .dg-node.cur');
+  if (!f || box.scrollWidth <= box.clientWidth + 2) return;
+  const cr = box.getBoundingClientRect();
+  const fr = f.getBoundingClientRect();
+  box.scrollLeft += fr.left + fr.width / 2 - (cr.left + cr.width / 2);
+}
+
+/* ===================== exemplos de gramática ===================== */
+const EXAMPLES = {
+  ex1: { grammar: 'CN -> CN tick tock | tick tock', opts: {}, input: 'tick tock tick tock' },
+  ex2: { grammar: 'Start -> S\nS -> A a\nA -> B C | B C f\nB -> b\nC -> c', opts: { termOrder: ['a', 'b', 'c', 'f'] }, input: 'b c f a' },
+  cmd: {
+    grammar: 'Cmd -> Lhs = Rhs | Rhs\nLhs -> * Rhs | id\nRhs -> Lhs',
+    opts: { termOrder: ['id', '=', '*'], startName: 'Start' },
+    paths: ['', 'Cmd', 'Lhs', 'Rhs', '*', 'id', 'Lhs =', '* Rhs', '* Lhs', 'Lhs = Rhs', 'Lhs = Lhs', 'Lhs = id', 'Lhs = *', 'Lhs = * Rhs'],
+    input: 'id = * * id',
+  },
+  robo: { grammar: 'S -> ↓ S | ↓ B ↑ S | ε\nB -> ↓ B ↑ B | ε', opts: { startName: 'Goal' }, input: '↓ ↑ ↓' },
+  ex4: { grammar: 'Start -> A | B\nA -> ( A ) | a\nB -> ( B } | b', opts: { termOrder: ['(', ')', '}', 'a', 'b'] }, input: '( ( a ) )' },
+  expr: { grammar: 'E -> E + T | E - T | T\nT -> ( E ) | intLit | floatLit', opts: {} },
+  posf: { grammar: 'E -> E + T | T\nT -> T * F | F\nF -> intLit', opts: {} },
+  bin: { grammar: 'Number -> Sign List\nSign -> + | -\nList -> List Bit | Bit\nBit -> 0 | 1', opts: {} },
+};
+const modelCache = new Map();
+function buildModel(spec) {
+  const G = LR.parseGrammar(spec.grammar, spec.opts);
+  const C0 = LR.buildCollection(G, 'lr0');
+  const C1 = LR.buildCollection(G, 'lr1', spec.paths ? { statePaths: spec.paths } : {});
+  const CL = LR.mergeLALR(C1);
+  const tables = {
+    lr0: LR.buildTable(C0, 'lr0'), slr: LR.buildTable(C0, 'slr'), lr1: LR.buildTable(C1, 'lr1'), lalr: LR.buildTable(CL, 'lalr'),
+  };
+  return { spec, G, C: { lr0: C0, slr: C0, lr1: C1, lalr: CL }, T: tables };
+}
+function model(key) {
+  if (!modelCache.has(key)) modelCache.set(key, buildModel(EXAMPLES[key]));
+  return modelCache.get(key);
+}
+const METHOD_NAME = { lr0: 'LR(0)', slr: 'SLR(1)', lr1: 'LR(1)', lalr: 'LALR(1)' };
+const ccName = (C, i) => `CC${LR.stateLabel(C, i)}`;
+const rawItem = (G, it) => {
+  const t = LR.prodText(G, G.prods[it.p], it.d);
+  return it.la == null ? t : `[${t}, ${it.la}]`;
+};
+
+/* ===================== autômato (SVG) ===================== */
+function basisPath(pts) {
+  let d = '';
+  let x0, y0, x1, y1;
+  let n = 0;
+  const bez = (x, y) => {
+    d += `C${(2 * x0 + x1) / 3},${(2 * y0 + y1) / 3} ${(x0 + 2 * x1) / 3},${(y0 + 2 * y1) / 3} ${(x0 + 4 * x1 + x) / 6},${(y0 + 4 * y1 + y) / 6}`;
+  };
+  for (const { x, y } of pts) {
+    if (n === 0) { d += `M${x},${y}`; n = 1; }
+    else if (n === 1) n = 2;
+    else if (n === 2) { n = 3; d += `L${(5 * x0 + x1) / 6},${(5 * y0 + y1) / 6}`; bez(x, y); }
+    else bez(x, y);
+    x0 = x1; x1 = x; y0 = y1; y1 = y;
+  }
+  if (n === 3) { bez(x1, y1); d += `L${x1},${y1}`; } else if (n === 2) d += `L${x1},${y1}`;
+  return d;
+}
+
+function nodeLines(C, i, mode) {
+  const G = C.G;
+  const groups = LR.groupItems(C, C.states[i].items);
+  const shown = mode === 'kernel' ? groups.filter((g) => g.kernel) : groups;
+  return shown.map((g) => {
+    const complete = g.d === G.prods[g.p].rhs.length;
+    return { text: LR.itemText(C, g), kernel: g.kernel, cls: complete ? (g.p === 0 ? 'accept' : 'complete') : (g.kernel ? '' : 'closure') };
+  });
+}
+
+function layoutGraph(nodes, edges, rankdir) {
+  if (window.dagre) {
+    const g = new dagre.graphlib.Graph();
+    g.setGraph({ rankdir, nodesep: 22, ranksep: 54, edgesep: 14, marginx: 16, marginy: 16 });
+    g.setDefaultEdgeLabel(() => ({}));
+    nodes.forEach((n) => g.setNode(String(n.id), { width: n.w, height: n.h }));
+    edges.forEach((e) => g.setEdge(String(e.from), String(e.to), { label: e.label, width: e.label.length * CH + 10, height: 18, labelpos: 'c' }));
+    dagre.layout(g);
+    const pos = {};
+    nodes.forEach((n) => { const p = g.node(String(n.id)); pos[n.id] = { x: p.x, y: p.y }; });
+    const ep = edges.map((e) => { const d = g.edge(String(e.from), String(e.to)); return { points: d.points, lx: d.x, ly: d.y }; });
+    const gr = g.graph();
+    return { pos, ep, W: gr.width, H: gr.height };
+  }
+  // Alternativa sem biblioteca: colunas por distância (BFS) a partir do estado 0.
+  const dist = { [nodes[0].id]: 0 };
+  const q = [nodes[0].id];
+  while (q.length) {
+    const v = q.shift();
+    for (const e of edges) if (e.from === v && dist[e.to] === undefined) { dist[e.to] = dist[v] + 1; q.push(e.to); }
+  }
+  const ranks = [];
+  nodes.forEach((n) => { const r = dist[n.id] ?? 0; (ranks[r] ||= []).push(n); });
+  const pos = {};
+  let x = 16;
+  let H = 0;
+  ranks.forEach((col) => {
+    const w = Math.max(...col.map((n) => n.w));
+    let y = 16;
+    col.forEach((n) => { pos[n.id] = { x: x + w / 2, y: y + n.h / 2 }; y += n.h + 26; });
+    H = Math.max(H, y);
+    x += w + 90;
+  });
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const ep = edges.map((e) => {
+    const a = pos[e.from];
+    const b = pos[e.to];
+    const na = byId[e.from];
+    if (e.from === e.to) {
+      const top = a.y - na.h / 2;
+      const pts = [{ x: a.x - 14, y: top }, { x: a.x - 18, y: top - 26 }, { x: a.x + 18, y: top - 26 }, { x: a.x + 14, y: top }];
+      return { points: pts, lx: a.x, ly: top - 30 };
+    }
+    const fw = b.x > a.x;
+    const s = { x: a.x + (fw ? na.w / 2 : 0), y: a.y + (fw ? 0 : na.h / 2) };
+    const t = { x: b.x - (fw ? byId[e.to].w / 2 : 0), y: b.y + (fw ? 0 : byId[e.to].h / 2) };
+    const m = { x: (s.x + t.x) / 2, y: fw ? (s.y + t.y) / 2 : Math.max(s.y, t.y) + 40 };
+    return { points: [s, m, t], lx: m.x, ly: m.y };
+  });
+  return { pos, ep, W: x, H: H + 40 };
+}
+
+/* Desenha o autômato. opts: mode, rankdir, selected, visible(Set), visibleEdges(Set "i|X"), current {state, edge}, onSelect */
+function drawAutomaton(host, C, opts = {}) {
+  const mode = opts.mode || 'full';
+  const nodes = C.states.map((st, i) => {
+    const lines = mode === 'label' ? [] : nodeLines(C, i, mode);
+    const title = ccName(C, i);
+    const w = Math.max(title.length * 8 + 20, ...lines.map((l) => l.text.length * CH + 20), 56);
+    const kernelCount = lines.filter((l) => l.kernel).length;
+    const h = 24 + lines.length * 16 + (lines.length ? 8 : 4) + (kernelCount && kernelCount < lines.length ? 4 : 0);
+    return { id: i, w, h, lines, title, acc: C.states[i].items.some((it) => it.p === 0 && it.d === 1) };
+  });
+  const edges = [];
+  C.trans.forEach((t, i) => Object.entries(t).forEach(([X, j]) => edges.push({ from: i, to: j, label: X, nt: C.G.isNT(X) })));
+  const L = layoutGraph(nodes, edges, opts.rankdir || 'LR');
+  const mid = nextId('m');
+  const svg = sv('svg', { viewBox: `0 0 ${L.W} ${L.H}`, width: L.W, height: L.H, role: 'img', 'aria-label': 'Autômato LR' });
+  svg.append(sv('defs', {},
+    sv('marker', { id: mid, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, sv('path', { d: 'M0,0 L10,5 L0,10 z', class: 'arrowhead' })),
+    sv('marker', { id: mid + 'c', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, sv('path', { d: 'M0,0 L10,5 L0,10 z', class: 'arrowhead cur' })),
+  ));
+  const eg = sv('g');
+  edges.forEach((e, k) => {
+    const visible = !opts.visibleEdges || opts.visibleEdges.has(`${e.from}|${e.label}`);
+    const cur = opts.current && opts.current.edge && opts.current.edge[0] === e.from && opts.current.edge[1] === e.label;
+    const g = sv('g', { class: `dg-edge${e.nt ? ' nt' : ''}${visible ? '' : ' ghost'}${cur ? ' cur' : ''}` });
+    g.append(sv('path', { d: basisPath(L.ep[k].points), 'marker-end': `url(#${cur ? mid + 'c' : mid})` }));
+    const lw = e.label.length * CH + 8;
+    g.append(sv('rect', { x: L.ep[k].lx - lw / 2, y: L.ep[k].ly - 9, width: lw, height: 18, rx: 4 }));
+    g.append(sv('text', { x: L.ep[k].lx, y: L.ep[k].ly + 4, 'text-anchor': 'middle' }, e.label));
+    eg.append(g);
+  });
+  svg.append(eg);
+  nodes.forEach((n) => {
+    const p = L.pos[n.id];
+    const x = p.x - n.w / 2;
+    const y = p.y - n.h / 2;
+    const visible = !opts.visible || opts.visible.has(n.id);
+    const cls = ['dg-node'];
+    if (opts.onSelect) cls.push('click');
+    if (!visible) cls.push('ghost');
+    if (opts.selected === n.id) cls.push('sel');
+    if (opts.current && opts.current.state === n.id) cls.push('cur');
+    if (n.acc) cls.push('acc');
+    const g = sv('g', { class: cls.join(' '), tabindex: opts.onSelect ? 0 : null, role: opts.onSelect ? 'button' : null, 'aria-label': n.title });
+    g.append(sv('rect', { class: 'box', x, y, width: n.w, height: n.h, rx: 8 }));
+    g.append(sv('rect', { class: 'hd', x: x + 1, y: y + 1, width: n.w - 2, height: 21, rx: 7 }));
+    g.append(sv('text', { class: 'title', x: x + 10, y: y + 16 }, n.title));
+    let yy = y + 24 + 13;
+    let sepDone = false;
+    n.lines.forEach((l) => {
+      if (!l.kernel && !sepDone && n.lines.some((q) => q.kernel)) {
+        g.append(sv('line', { class: 'sep', x1: x + 6, x2: x + n.w - 6, y1: yy - 11, y2: yy - 11 }));
+        yy += 4;
+        sepDone = true;
+      }
+      g.append(sv('text', { x: x + 10, y: yy, class: l.cls || null }, l.text));
+      yy += 16;
+    });
+    if (opts.onSelect) {
+      g.addEventListener('click', () => opts.onSelect(n.id));
+      g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); opts.onSelect(n.id); } });
+    }
+    svg.append(g);
+  });
+  host.replaceChildren(svg);
+  if (host.classList.contains('diagram')) scrollToFocus(host);
+  return svg;
+}
+
+function automatonBox(C, opts = {}) {
+  const wrap = el('div');
+  let mode = opts.mode || 'full';
+  let fit = false;
+  const diag = el('div', { class: 'diagram' });
+  const detail = el('div');
+  let selected = opts.selected ?? null;
+  const redraw = () => {
+    drawAutomaton(diag, C, { ...opts, mode, selected, onSelect: (i) => { selected = i; redraw(); showDetail(i); opts.onSelect && opts.onSelect(i); } });
+  };
+  const showDetail = (i) => detail.replaceChildren(stateDetail(C, i, opts.table));
+  const tools = el('div', { class: 'toolbar' },
+    seg([['full', 'Itens completos'], ['kernel', 'Só o núcleo']], mode, (v) => { mode = v; redraw(); }),
+    el('button', { class: 'btn', type: 'button', onclick: (ev) => { fit = !fit; diag.classList.toggle('fit', fit); ev.currentTarget.textContent = fit ? 'Tamanho real' : 'Ajustar à largura'; } }, 'Ajustar à largura'),
+    el('span', { class: 'stepinfo' }, `${C.states.length} estados · toque num estado para ver os detalhes`));
+  wrap.append(tools, diag, detail);
+  redraw();
+  if (selected != null) showDetail(selected);
+  return { el: wrap, redraw, select: (i) => { selected = i; redraw(); showDetail(i); } };
+}
+
+function itemListEl(C, items, opts = {}) {
+  const groups = LR.groupItems(C, items);
+  const ul = el('ul', { class: 'itemlist' });
+  let sep = false;
+  groups.forEach((g) => {
+    const li = el('li', {}, LR.itemText(C, g));
+    if (!g.kernel && !sep && groups.some((q) => q.kernel)) { li.classList.add('sepk'); sep = true; }
+    if (opts.hl && opts.hl(g)) li.classList.add('hl');
+    ul.append(li);
+  });
+  return ul;
+}
+
+function stateDetail(C, i, T) {
+  const G = C.G;
+  const st = C.states[i];
+  const card = el('div', { class: 'statecard', style: 'margin-top:10px' });
+  card.append(el('h4', {}, ccName(C, i)));
+  let origin = '';
+  if (i === 0) origin = `closure({${rawItem(G, st.kernel[0])}}) — estado inicial`;
+  else if (st.via) origin = `goto(${ccName(C, st.via.from)}, ${st.via.sym})`;
+  else if (st.members) origin = st.members.length > 1 ? `fusão LALR dos estados LR(1) ${st.members.map((m) => 'CC' + m).join(' e ')} (mesmo núcleo)` : `estado LR(1) CC${st.members[0]} (nenhum outro com o mesmo núcleo)`;
+  card.append(el('p', { class: 'stepinfo' }, `Origem: ${origin}`));
+  card.append(el('div', { class: 'scroll-x' }, itemListEl(C, st.items)));
+  const tr = Object.entries(C.trans[i]);
+  if (tr.length) card.append(el('p', { style: 'margin:8px 0 0;font-size:.9rem' }, 'Transições: ', tr.map(([X, j]) => `${X} → ${ccName(C, j)}`).join(' · ')));
+  else card.append(el('p', { style: 'margin:8px 0 0;font-size:.9rem' }, 'Sem transições saindo deste estado.'));
+  if (T) {
+    const acts = [];
+    for (const t of G.terms) { const cell = T.action[i][t]; if (cell) acts.push(`${t}: ${cell.map((e) => LR.actionText(e, C)).join(' / ')}`); }
+    card.append(el('p', { style: 'margin:4px 0 0;font-size:.9rem' }, `Linha da tabela: ${acts.join(' · ') || 'só erros'}`));
+  }
+  return card;
+}
+
+/* ===================== tabela Ações/Goto ===================== */
+function cellWhy(T, s, sym) {
+  const { C, G, method } = T;
+  const name = ccName(C, s);
+  if (G.isNT(sym)) {
+    const j = T.go[s][sym];
+    if (j === undefined) return `<p>Goto[${name}, ${esc(sym)}] vazio: nenhum item de ${name} tem o ponto antes de ${esc(sym)}.</p>`;
+    return `<p><b>g${esc(LR.stateLabel(C, j))}</b>: transição por não terminal. goto(${name}, ${esc(sym)}) = ${ccName(C, j)}. É consultado logo depois de uma redução para ${esc(sym)}.</p>`;
+  }
+  const cell = T.action[s][sym];
+  if (!cell) return `<p>Célula vazia = <b>erro</b>. Nenhum item de ${name} desloca <code>${esc(sym)}</code> e nenhum item completo tem <code>${esc(sym)}</code> como lookahead${method === 'slr' ? ' (no FOLLOW)' : ''}.</p>`;
+  const parts = cell.map((e) => {
+    const its = [...new Set(e.why.map((it) => rawItem(G, it)))].map((t) => `<span class="item">${esc(t)}</span>`).join(' ');
+    if (e.type === 's') return `<p><b class="a-s">s${esc(LR.stateLabel(C, e.n))}</b> (desloca): ${name} tem ${its}, com o ponto antes de <code>${esc(sym)}</code>; goto(${name}, ${esc(sym)}) = ${ccName(C, e.n)}.</p>`;
+    if (e.type === 'acc') return `<p><b class="a-acc">acc</b>: ${its} é a produção aumentada completa. Aceita quando o próximo token é eof.</p>`;
+    const p = G.prods[e.n];
+    let rule;
+    if (method === 'lr0') rule = 'No LR(0) a redução ocupa <b>todas</b> as colunas de terminais.';
+    else if (method === 'slr') rule = `No SLR a redução vai para as colunas de FOLLOW(${esc(p.lhs)}) = {${[...G.FOLLOW[p.lhs]].map(esc).join(', ')}}.`;
+    else rule = `No ${METHOD_NAME[method]} a redução vai só para a coluna do lookahead do item (<code>${esc(sym)}</code>).`;
+    return `<p><b class="a-r">r${e.n}</b> (reduz ${esc(LR.prodText(G, p))}): ${name} tem o item completo ${its}. ${rule}</p>`;
+  });
+  const conflict = cell.length > 1 ? `<p class="bad">Conflito ${cell.every((e) => e.type === 'r') ? 'reduce/reduce' : 'shift/reduce'}: duas ações na mesma célula. A gramática não é ${METHOD_NAME[method]}.</p>` : '';
+  return conflict + parts.join('');
+}
+
+function tableBox(T, opts = {}) {
+  const { C, G } = T;
+  const nts = G.nonterms.slice(1);
+  const wrap = el('div');
+  const tw = el('div', { class: 'tbl-wrap' });
+  const table = el('table', { class: 'lrtable' });
+  const thead = el('thead');
+  thead.append(el('tr', {}, el('th', { class: 'st', rowspan: 2 }, 'Estado'), el('th', { colspan: G.terms.length }, 'Ações'), el('th', { colspan: nts.length, class: 'div' }, 'Goto')));
+  thead.append(el('tr', {}, ...G.terms.map((t) => el('th', { 'data-col': t }, t)), ...nts.map((n, k) => el('th', { 'data-col': n, class: k === 0 ? 'div' : null }, n))));
+  table.append(thead);
+  const tbody = el('tbody');
+  const why = el('div', { class: 'why panel', hidden: !opts.showWhy });
+  why.innerHTML = '<p class="stepinfo">Toque numa célula para ver de onde ela veio.</p>';
+  const cells = {};
+  C.states.forEach((_, s) => {
+    const tr = el('tr', { 'data-row': s });
+    tr.append(el('td', { class: 'st' }, LR.stateLabel(C, s)));
+    G.terms.forEach((t) => {
+      const cell = T.action[s][t];
+      let txt = '—';
+      let cls = 'c empty';
+      if (cell) {
+        txt = cell.map((e) => LR.actionText(e, C)).join(' / ');
+        cls = cell.length > 1 ? 'c conf' : `c a-${cell[0].type}`;
+      }
+      const td = el('td', { class: cls }, txt);
+      td.onclick = () => select(s, t);
+      cells[`${s}|${t}`] = td;
+      tr.append(td);
+    });
+    nts.forEach((n, k) => {
+      const j = T.go[s][n];
+      const td = el('td', { class: `c ${j === undefined ? 'empty' : 'a-g'}${k === 0 ? ' div' : ''}` }, j === undefined ? '—' : 'g' + LR.stateLabel(C, j));
+      td.onclick = () => select(s, n);
+      cells[`${s}|${n}`] = td;
+      tr.append(td);
+    });
+    tbody.append(tr);
+  });
+  table.append(tbody);
+  tw.append(table);
+  const legend = el('div', { class: 'legend' }, el('span', { class: 'l-s' }, 'sN desloca e vai ao estado N'), el('span', { class: 'l-r' }, 'rN reduz pela produção N'), el('span', { class: 'l-g' }, 'gN goto'), el('span', { class: 'l-acc' }, 'acc aceita'), el('span', { class: 'l-c' }, 'conflito'));
+  const prods = el('div', { class: 'grammar', html: G.prods.map((p) => `<span class="num">r${p.idx}:</span> ${esc(LR.prodText(G, p))}${p.idx === 0 ? '   <span class="cm">(aumentada → acc)</span>' : ''}`).join('\n') });
+  let conf = null;
+  if (T.conflicts.length) {
+    conf = el('div', { class: 'note err', html: `<b>${T.conflicts.length} conflito(s):</b> ` + T.conflicts.map((c) => `${ccName(C, c.state)} com <code>${esc(c.term)}</code> (${c.type}: ${c.entries.map((e) => LR.actionText(e, C)).join(' × ')})`).join('; ') + `. A gramática <b>não</b> é ${METHOD_NAME[T.method]}.` });
+  } else {
+    conf = el('div', { class: 'note ok', html: `Nenhuma célula com duas ações: a gramática <b>é ${METHOD_NAME[T.method]}</b>.` });
+  }
+  if (opts.prods !== false) wrap.append(prods);
+  wrap.append(legend, tw, conf, why);
+  let selKey = null;
+  function select(s, sym, silent) {
+    $$('.sel', table).forEach((x) => x.classList.remove('sel'));
+    $$('tr.rowsel', table).forEach((x) => x.classList.remove('rowsel'));
+    $$('th.colsel', table).forEach((x) => x.classList.remove('colsel'));
+    if (s == null) return;
+    selKey = `${s}|${sym}`;
+    const td = cells[selKey];
+    if (td) td.classList.add('sel');
+    const row = $(`tr[data-row="${s}"]`, tbody);
+    if (row) row.classList.add('rowsel');
+    const th = $$('th[data-col]', thead).find((x) => x.dataset.col === sym);
+    if (th) th.classList.add('colsel');
+    if (!silent) { why.hidden = false; why.innerHTML = `<p class="stepinfo">Célula [${esc(LR.stateLabel(C, s))}, ${esc(sym)}]</p>` + cellWhy(T, s, sym); }
+  }
+  return { el: wrap, select };
+}
+
+/* ===================== execução com pilha ===================== */
+function tokenize(text) { return text.trim() ? text.trim().split(/\s+/) : []; }
+const stackStr = (st) => st.map((e) => `(${e.sym},${e.state})`).join('');
+
+function explainStep(T, step) {
+  const { C, G } = T;
+  const top = step.stack[step.stack.length - 1].state;
+  const tok = step.input[0].sym;
+  const where = `Ação[${esc(LR.stateLabel(C, top))}, ${esc(tok)}]`;
+  let conf = '';
+  if (step.conflict) {
+    const [chosen, ...rest] = T.action[top][tok].map((e) => esc(LR.actionText(e, C)));
+    conf = `<p class="err-msg"><b>Conflito:</b> a célula tem ${chosen} / ${rest.join(' / ')}. O simulador seguiu a primeira (${chosen}); ${rest.length > 1 ? 'as outras ficaram' : 'a outra ficou'} de fora (${rest.join(', ')}).</p>`;
+  }
+  if (step.kind === 's') return `<p><b>${where} = s${esc(LR.stateLabel(C, step.target))}</b> → desloca: empilha (<code>${esc(tok)}</code>, ${esc(LR.stateLabel(C, step.target))}) e consome <code>${esc(tok)}</code>.</p>` + conf;
+  if (step.kind === 'acc') return `<p><b>${where} = acc</b> → a entrada foi reconhecida. 🎉</p>` + conf;
+  if (step.kind === 'err') return `<p><b>${where} vazia</b> → erro sintático: esta entrada não pertence à linguagem.</p>`;
+  const p = step.prod;
+  const k = step.popped;
+  const popTxt = k === 0 ? 'Produção vazia: desempilha <b>0</b> pares e consulta o goto no próprio topo.' : `Desempilha <b>${k}</b> par${k > 1 ? 'es' : ''} (|lado direito| = ${k}).`;
+  return `<p><b>${where} = r${p.idx}</b> → reduz <code>${esc(LR.prodText(G, p))}</code>.</p>
+    <p>${popTxt} Topo exposto: estado ${esc(LR.stateLabel(C, step.exposed))}. Goto[${esc(LR.stateLabel(C, step.exposed))}, ${esc(p.lhs)}] = ${esc(LR.stateLabel(C, step.target))} → empilha (${esc(p.lhs)}, ${esc(LR.stateLabel(C, step.target))}).</p>
+    <p class="stepinfo">A redução não consome entrada: quem consome token é o deslocamento.</p>` + conf;
+}
+
+function stackViz(T, step) {
+  const { C } = T;
+  const box = el('div', { class: 'stackviz', 'aria-label': 'Pilha' });
+  const n = step.stack.length;
+  step.stack.forEach((e, i) => {
+    const f = el('div', { class: 'sframe' }, el('span', { class: 'sy' }, e.sym), el('span', { class: 'ss' }, LR.stateLabel(C, e.state)));
+    if (step.kind === 'r' && i >= n - step.popped) f.classList.add('pop');
+    if (i === n - 1 && !(step.kind === 'r' && step.popped)) f.classList.add('top');
+    box.append(f);
+  });
+  if (step.kind === 's') box.append(el('div', { class: 'sframe push' }, el('span', { class: 'sy' }, step.input[0].sym), el('span', { class: 'ss' }, LR.stateLabel(C, step.target))));
+  if (step.kind === 'r') box.append(el('div', { class: 'sframe push' }, el('span', { class: 'sy' }, step.prod.lhs), el('span', { class: 'ss' }, LR.stateLabel(C, step.target))));
+  return box;
+}
+
+function traceBox(T, inputText, opts = {}) {
+  const wrap = el('div');
+  const inp = el('input', { type: 'text', value: inputText, id: nextId('inp'), 'aria-label': 'Entrada (tokens separados por espaço)' });
+  const runBtn = el('button', { class: 'btn primary', type: 'button' }, 'Executar');
+  const field = el('div', { class: 'field' }, el('label', { for: inp.id }, 'Entrada:'), inp, runBtn);
+  if (opts.keys) opts.keys.forEach((k) => field.append(el('button', { class: 'btn', type: 'button', onclick: () => { inp.value = (inp.value.trim() + ' ' + k).trim(); } }, k)));
+  if (opts.keys) field.append(el('button', { class: 'btn', type: 'button', onclick: () => { inp.value = ''; } }, 'Limpar'));
+  const body = el('div');
+  wrap.append(field, el('p', { class: 'stepinfo', style: 'margin:4px 0' }, 'Tokens separados por espaço; o eof é acrescentado automaticamente.'), body);
+  const run = () => {
+    body.replaceChildren();
+    const toks = tokenize(inp.value);
+    const bad = toks.filter((t) => !T.G.terms.includes(t) || t === LR.EOF);
+    if (bad.length) { body.append(el('p', { class: 'err-msg' }, `Token desconhecido: ${bad.join(', ')}. Terminais desta gramática: ${T.G.terms.filter((t) => t !== LR.EOF).join(' ')}`)); return; }
+    const res = LR.run(T, toks);
+    const steps = res.steps;
+    const left = el('div');
+    const right = el('div');
+    const grid = el('div', { class: opts.withTable ? 'cols-even' : '' }, left, right);
+    const ctrl = el('div');
+    const exp = el('div', { class: 'explain' });
+    const sviz = el('div');
+    const tape = el('div', { class: 'tape', 'aria-label': 'Entrada restante' });
+    const tbody = el('tbody');
+    steps.forEach((s, i) => {
+      tbody.append(el('tr', {}, el('td', {}, i), el('td', {}, '(⊥,0)' + stackStr(s.stack.slice(1).map((e) => ({ sym: e.sym, state: LR.stateLabel(T.C, e.state) })))), el('td', {}, s.input.map((t) => t.sym).join(' ')), el('td', { class: `act-${s.kind}` }, s.kind === 'r' ? `${s.text}: ${LR.prodText(T.G, s.prod)}` : s.text)));
+    });
+    const traceT = el('div', { class: 'tbl-wrap' }, el('table', { class: 't trace' }, el('thead', {}, el('tr', {}, el('th', {}, 'Passo'), el('th', {}, 'Pilha'), el('th', {}, 'Entrada'), el('th', {}, 'Ação'))), tbody));
+    left.append(ctrl, exp, el('div', { class: 'stepinfo' }, 'Pilha (fundo à esquerda, topo à direita; riscado = sai, verde = entra):'), sviz, el('div', { class: 'stepinfo', style: 'margin-top:6px' }, 'Entrada:'), tape, traceT);
+    let tb = null;
+    if (opts.withTable) { tb = tableBox(T, { prods: true }); right.append(tb.el); }
+    body.append(grid, el('div', { class: `note ${res.ok ? 'ok' : 'err'}` }, res.ok ? `Entrada aceita em ${steps.length} passos.` : 'Entrada rejeitada: a pilha chega a uma célula vazia (erro).'));
+    const nConf = steps.filter((s) => s.conflict).length;
+    if (nConf) body.append(el('div', { class: 'note warn' }, `Atenção: ${nConf} passo(s) caíram em célula com conflito; o simulador seguiu a primeira ação da célula, então outra escolha poderia dar outro resultado.`));
+    makeStepper(ctrl, steps.length, (k) => {
+      const s = steps[k];
+      exp.className = `explain k-${s.kind}`;
+      exp.innerHTML = `<p class="stepinfo">Passo ${k}</p>` + explainStep(T, s);
+      sviz.replaceChildren(stackViz(T, s));
+      const all = [...toks, LR.EOF];
+      tape.replaceChildren(...all.map((t, i) => el('span', { class: i < s.pos ? 'done' : i === s.pos ? 'cur' : '' }, t)));
+      [...tbody.children].forEach((tr, i) => { tr.className = i < k ? '' : i === k ? 'now' : 'future'; });
+      if (tb) tb.select(s.stack[s.stack.length - 1].state, s.input[0].sym, true);
+    }, { ms: 1200 });
+  };
+  runBtn.onclick = run;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+  run();
+  return { el: wrap };
+}
+
+/* ===================== construção passo a passo ===================== */
+function closureReasonsEl(C, st) {
+  const G = C.G;
+  const withLA = C.kind === 'lr1';
+  const ul = el('ul', { class: 'itemlist' });
+  const groups = LR.groupItems(C, st.items);
+  let sep = false;
+  groups.forEach((g) => {
+    const li = el('li', {}, LR.itemText(C, g));
+    if (g.kernel) { li.append(el('span', { class: 'r' }, st.via || st.members ? 'núcleo (veio do goto)' : 'item inicial (produção aumentada, lookahead eof)')); }
+    else {
+      if (!sep) { li.classList.add('sepk'); sep = true; }
+      const raws = st.items.filter((it) => !it.kernel && it.p === g.p && it.d === g.d);
+      const reasons = [];
+      raws.forEach((it) => {
+        const src = rawItem(G, it.from.item);
+        const Y = G.prods[it.p].lhs;
+        if (!withLA) { reasons.push(`ponto antes de ${Y} em ${src} ⇒ inclui as produções de ${Y}`); return; }
+        const seq = [...it.from.beta, it.from.item.la].join(' ');
+        const txt = `de ${src}: FIRST(${seq}) = {${it.from.las.join(', ')}} ⇒ lookahead ${it.la}`;
+        if (!reasons.includes(txt)) reasons.push(txt);
+      });
+      reasons.forEach((r) => li.append(el('span', { class: 'r' }, r)));
+    }
+    ul.append(li);
+  });
+  return ul;
+}
+
+function constructionBox(C, opts = {}) {
+  const G = C.G;
+  const wrap = el('div');
+  const ctrl = el('div');
+  const exp = el('div', { class: 'explain' });
+  const diag = el('div', { class: 'diagram' });
+  const grid = el('div', { class: 'cols' }, el('div', {}, exp), el('div', {}, diag));
+  wrap.append(ctrl, grid);
+  const log = C.log;
+  makeStepper(ctrl, log.length, (k) => {
+    const visible = new Set([0]);
+    const visibleEdges = new Set();
+    for (let i = 1; i <= k; i++) { visible.add(log[i].to); visibleEdges.add(`${log[i].from}|${log[i].sym}`); }
+    const e = log[k];
+    if (e.type === 'init') {
+      const st = C.states[0];
+      exp.className = 'explain';
+      exp.replaceChildren(
+        el('p', { html: `<b>CC0 = closure({${esc(rawItem(G, st.kernel[0]))}})</b>` }),
+        el('p', { class: 'stepinfo' }, C.kind === 'lr1' ? 'Para cada item [X → α • Y β, ℓ] com Y não terminal, entram os itens [Y → • δ, s] para cada s em FIRST(β ℓ). Repete até nada novo aparecer.' : 'Para cada item com o ponto antes de um não terminal Y, entram as produções Y → • δ. Repete até nada novo aparecer.'),
+        el('div', { class: 'scroll-x' }, closureReasonsEl(C, st)));
+      drawAutomaton(diag, C, { mode: opts.mode || 'kernel', visible, visibleEdges, current: { state: 0 } });
+      return;
+    }
+    const src = C.states[e.from];
+    const dst = C.states[e.to];
+    exp.className = `explain ${e.isNew ? 'k-s' : 'k-r'}`;
+    const srcList = itemListEl(C, src.items, { hl: (g) => G.prods[g.p].rhs[g.d] === e.sym });
+    const kids = [
+      el('p', { html: `<b>goto(${ccName(C, e.from)}, ${esc(e.sym)})</b>: pegue <i>todos</i> os itens de ${ccName(C, e.from)} com <code>${esc(e.sym)}</code> logo depois do ponto (destacados), avance o ponto e aplique closure.` }),
+      el('div', { class: 'scroll-x' }, srcList),
+    ];
+    if (e.isNew) {
+      kids.push(el('p', { html: `Resultado: <b class="good">novo estado ${ccName(C, e.to)}</b>` }), el('div', { class: 'scroll-x' }, closureReasonsEl(C, dst)));
+    } else {
+      kids.push(el('p', { html: `Resultado: o conjunto obtido <b>já existe</b> — é ${ccName(C, e.to)}. Só acrescentamos a transição ${ccName(C, e.from)} —${esc(e.sym)}→ ${ccName(C, e.to)}.` }));
+    }
+    kids.push(el('p', { class: 'stepinfo' }, G.isNT(e.sym) ? `Transição por não terminal → vira goto na tabela (g${LR.stateLabel(C, e.to)}).` : `Transição por terminal → vira deslocamento na tabela (s${LR.stateLabel(C, e.to)}).`));
+    exp.replaceChildren(...kids);
+    drawAutomaton(diag, C, { mode: opts.mode || 'kernel', visible, visibleEdges, current: { state: e.to, edge: [e.from, e.sym] } });
+  }, { ms: 1800 });
+  return { el: wrap };
+}
+
+/* ===================== bancada (autômato | construção | tabela | pilha) ===================== */
+function workbench(host, key, o = {}) {
+  const m = typeof key === 'string' ? model(key) : key;
+  let method = o.method || 'lr1';
+  const methods = o.methods || [method];
+  const tabsList = o.tabs || ['auto', 'table', 'trace'];
+  let tab = o.tab || tabsList[0];
+  const TABN = { auto: 'Autômato', build: 'Construção passo a passo', table: 'Tabela Ações/Goto', trace: 'Pilha (execução)' };
+  const top = el('div', { class: 'toolbar' });
+  if (methods.length > 1) top.append(el('span', { class: 'stepinfo' }, 'Método:'), seg(methods.map((x) => [x, METHOD_NAME[x]]), method, (v) => { method = v; render(); }));
+  const tabs = el('div', { class: 'tabs', role: 'tablist' });
+  const body = el('div');
+  const btns = tabsList.map((t) => {
+    const b = el('button', { type: 'button', role: 'tab', 'aria-selected': String(t === tab) }, TABN[t]);
+    b.onclick = () => { tab = t; btns.forEach((x) => x.setAttribute('aria-selected', String(x === b))); render(); };
+    tabs.append(b);
+    return b;
+  });
+  host.append(top, tabs, body);
+  function render() {
+    const C = m.C[method];
+    const T = m.T[method];
+    body.replaceChildren();
+    if (tab === 'auto') body.append(automatonBox(C, { mode: o.mode || 'full', table: T }).el);
+    if (tab === 'build') {
+      if (C.log.length) body.append(constructionBox(C, { mode: o.buildMode || 'full' }).el);
+      else body.append(el('div', { class: 'note' }, method === 'lalr' ? 'O autômato LALR não é construído do zero: ele vem da coleção LR(1), fundindo estados com o mesmo núcleo. Escolha LR(1) para ver a construção passo a passo e depois volte aqui para ver o resultado da fusão no Autômato.' : 'Sem passos.'));
+    }
+    if (tab === 'table') body.append(tableBox(T, { showWhy: true }).el);
+    if (tab === 'trace') body.append(traceBox(T, o.input ?? m.spec.input ?? '', { withTable: o.traceTable !== false, keys: o.keys }).el);
+  }
+  render();
+}
+
+/* ===================== árvores (AST, árvore concreta, SDD) ===================== */
+function nodeSize(n) {
+  const lines = [n.label, ...(n.subs || []).map((s) => s.text)];
+  const w = Math.max(...lines.map((l) => String(l).length * CH)) + 18;
+  const h = 22 + (n.subs ? n.subs.length * 14 : 0);
+  return { w: Math.max(w, 34), h };
+}
+function layoutForest(roots, o = {}) {
+  const gapX = o.gapX ?? 14;
+  const gapY = o.gapY ?? 34;
+  const levelH = [];
+  const walk = (n, d) => { n._sz = nodeSize(n); n._d = d; levelH[d] = Math.max(levelH[d] || 0, n._sz.h); (n.kids || []).forEach((c) => walk(c, d + 1)); };
+  roots.forEach((r) => walk(r, 0));
+  const levelY = [];
+  let acc = 10;
+  levelH.forEach((hh, d) => { levelY[d] = acc; acc += hh + gapY; });
+  const span = (n) => {
+    const kids = n.kids || [];
+    if (!kids.length) { n._span = n._sz.w; return n._span; }
+    const sum = kids.reduce((s, c) => s + span(c), 0) + gapX * (kids.length - 1);
+    n._span = Math.max(n._sz.w, sum);
+    return n._span;
+  };
+  const place = (n, left) => {
+    const kids = n.kids || [];
+    n._y = levelY[n._d];
+    if (!kids.length) { n._x = left + n._span / 2; return; }
+    const sum = kids.reduce((s, c) => s + c._span, 0) + gapX * (kids.length - 1);
+    let x = left + (n._span - sum) / 2;
+    kids.forEach((c) => { place(c, x); x += c._span + gapX; });
+    n._x = (kids[0]._x + kids[kids.length - 1]._x) / 2;
+  };
+  let left = 10;
+  roots.forEach((r) => { span(r); place(r, left); left += r._span + 34; });
+  return { W: Math.max(left - 24, 60), H: acc - gapY + 14 };
+}
+function drawForest(host, roots, o = {}) {
+  if (!roots.length) { host.replaceChildren(el('p', { class: 'stepinfo', style: 'padding:10px;margin:0' }, o.empty || 'Pilha vazia: nada construído ainda.')); return null; }
+  const L = layoutForest(roots, o);
+  const s = sv('svg', { viewBox: `0 0 ${L.W} ${L.H}`, width: L.W, height: L.H, class: 'tree', role: 'img', 'aria-label': o.label || 'Árvore' });
+  const edges = sv('g');
+  const nodes = sv('g');
+  const walk = (n) => {
+    const { w, h } = n._sz;
+    (n.kids || []).forEach((c) => {
+      const y1 = n._y + h;
+      const y2 = c._y;
+      edges.append(sv('path', { class: 'te', d: `M${n._x},${y1} C${n._x},${(y1 + y2) / 2} ${c._x},${(y1 + y2) / 2} ${c._x},${y2}` }));
+      walk(c);
+    });
+    const g = sv('g', { class: `tn${n.kids && n.kids.length ? '' : ' leaf'}${n.cls ? ' ' + n.cls : ''}` });
+    if (n.shape === 'pill') g.append(sv('rect', { x: n._x - w / 2, y: n._y, width: w, height: h, rx: Math.min(h / 2, 12) }));
+    else g.append(sv('rect', { x: n._x - w / 2, y: n._y, width: w, height: h, rx: 5 }));
+    g.append(sv('text', { x: n._x, y: n._y + 15, 'text-anchor': 'middle' }, n.label));
+    (n.subs || []).forEach((sb, i) => g.append(sv('text', { class: `sub ${sb.cls || ''}`, x: n._x, y: n._y + 29 + i * 14, 'text-anchor': 'middle' }, sb.text)));
+    nodes.append(g);
+  };
+  roots.forEach(walk);
+  s.append(edges, nodes);
+  host.replaceChildren(s);
+  if (host.classList.contains('diagram')) scrollToFocus(host);
+  return s;
+}
+
+/* ===================== tradução dirigida por sintaxe sobre o parser LR ===================== */
+function lexExpr(text, allowFloat = true, ops = '+-()') {
+  const toks = [];
+  const re = /\s*(\d+\.\d+|\d+|\S)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const t = m[1];
+    if (/^\d+\.\d+$/.test(t)) { if (!allowFloat) throw new Error(`Literal real não previsto nesta gramática: ${t}`); toks.push({ sym: 'floatLit', text: t, lexeme: t }); }
+    else if (/^\d+$/.test(t)) toks.push({ sym: 'intLit', text: t, lexeme: t });
+    else if (ops.includes(t)) toks.push({ sym: t, text: t });
+    else throw new Error(`Caractere inesperado: "${t}"`);
+  }
+  if (!toks.length) throw new Error('Digite uma expressão.');
+  return toks;
+}
+
+/* cfg: key, input, lex, shift(tok)→val, reduce(prod, vals)→{val, act}, view(host, stepIndex, ctx), onDone(res) */
+function sdtStepper(host, cfg) {
+  const m = model(cfg.key);
+  const T = m.T.lalr;
+  const inp = el('input', { type: 'text', value: cfg.input, id: nextId('sdt'), 'aria-label': 'Expressão de entrada' });
+  const runBtn = el('button', { class: 'btn primary', type: 'button' }, 'Traduzir');
+  const field = el('div', { class: 'field' }, el('label', { for: inp.id }, 'Entrada:'), inp, runBtn);
+  const body = el('div');
+  host.append(field, body);
+  const run = () => {
+    body.replaceChildren();
+    let toks;
+    try { toks = cfg.lex(inp.value); } catch (e) { body.append(el('p', { class: 'err-msg' }, e.message)); return; }
+    const acts = [];
+    const res = LR.run(T, toks, {
+      shift: cfg.shift,
+      reduce: (p, vals, popped) => { const r = cfg.reduce(p, vals, popped); acts.push(r); return r.val; },
+    });
+    if (!res.ok) { body.append(el('p', { class: 'err-msg' }, 'Erro sintático: a expressão não segue a gramática.')); return; }
+    const steps = res.steps;
+    let ri = 0;
+    steps.forEach((s) => { if (s.kind === 'r') { const r = acts[ri++]; s.act = r.act || ''; s.out = r.out; } });
+    // linhas no formato do caderno: « desloca, → reduz
+    const lines = [{ mk: '', form: '• ' + toks.map((t) => t.text).join(' '), act: '' }];
+    for (let i = 0; i < steps.length - 1; i++) {
+      const s = steps[i];
+      const after = steps[i + 1];
+      const stackSyms = after.stack.slice(1).map((e) => (e.sym === 'intLit' || e.sym === 'floatLit' ? e.text : e.sym));
+      const rest = after.input.filter((t) => t.sym !== LR.EOF).map((t) => t.text);
+      lines.push({ mk: s.kind === 'r' ? '→' : '«', kind: s.kind, form: `${stackSyms.join(' ')} <span class="dot">•</span> ${rest.join(' ')}`, act: s.kind === 'r' ? `${LR.prodText(m.G, s.prod)}   ${s.act}` : '' });
+    }
+    const sent = el('div', { class: 'sentlines', 'aria-label': 'Formas sentenciais' });
+    lines.forEach((l, i) => sent.append(el('div', {}, el('span', { class: `mk ${l.kind || ''}` }, l.mk || String(i)), el('span', { html: `${l.form.startsWith('•') ? '<span class="dot">•</span>' + esc(l.form.slice(1)) : l.form}${l.act ? `<span class="act">${esc(l.act)}</span>` : ''}` }))));
+    const ctrl = el('div');
+    const exp = el('div', { class: 'explain' });
+    const viz = el('div');
+    const out = el('div');
+    body.append(ctrl, el('div', { class: 'cols' }, el('div', {}, exp, el('div', { class: 'stepinfo', style: 'margin:6px 0 4px' }, '« = desloca · → = reduz e executa a ação (formato do caderno)'), sent), el('div', {}, viz)), out);
+    makeStepper(ctrl, lines.length, (k) => {
+      [...sent.children].forEach((d, i) => { d.className = i < k ? '' : i === k ? 'now' : 'future'; });
+      const stackAfter = k === 0 ? steps[0].stack : steps[k].stack; // pilha depois do passo k-1 = snapshot do passo k
+      const s = k === 0 ? null : steps[k - 1];
+      if (!s) { exp.className = 'explain'; exp.innerHTML = '<p>Início: pilha vazia, ponto antes do primeiro token.</p>'; }
+      else if (s.kind === 's') { exp.className = 'explain k-s'; exp.innerHTML = `<p><b>Desloca</b> <code>${esc(s.input[0].text)}</code>. Nenhuma ação semântica ainda: ações executam nas <b>reduções</b>.</p>`; }
+      else { exp.className = 'explain k-r'; exp.innerHTML = `<p><b>Reduz</b> <code>${esc(LR.prodText(m.G, s.prod))}</code></p><p>Ação: <code>${esc(s.act)}</code></p>`; }
+      let outNow = [];
+      for (let i = 0; i < k; i++) if (steps[i].out) outNow = steps[i].out;
+      cfg.view(viz, { k, step: s, stack: stackAfter.slice(1), last: k === lines.length - 1, created: s && s.kind === 'r' ? s.val : null, out: outNow });
+      out.replaceChildren();
+      if (k === lines.length - 1 && cfg.onDone) out.append(cfg.onDone(res.value));
+    }, { ms: 1100 });
+  };
+  runBtn.onclick = run;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+  run();
+}
+
+/* ===================== slides: montagem de cada widget ===================== */
+const W = {};
+
+W.workbench = (h) => {
+  const d = h.dataset;
+  workbench(h, d.ex, {
+    method: d.method, methods: d.methods ? d.methods.split(',') : undefined, tabs: d.tabs ? d.tabs.split(',') : undefined,
+    tab: d.tab, mode: d.mode, input: d.input, keys: d.keys ? d.keys.split(',') : undefined, buildMode: d.buildMode,
+  });
+};
+
+W.closureDemo = (h) => {
+  const m = model('ex2');
+  const C = m.C.lr1;
+  const G = m.G;
+  let which = 0;
+  const box = el('div');
+  const ctrlHost = el('div');
+  const pick = seg([[0, 'CC0 (estado inicial)'], [3, 'CC3 = goto(CC0, B)']], which, (v) => { which = v; draw(); });
+  h.append(el('div', { class: 'toolbar' }, pick), ctrlHost, box);
+  let stepper = null;
+  function draw() {
+    const st = C.states[which];
+    const items = st.items;
+    if (stepper) stepper.stop();
+    ctrlHost.replaceChildren();
+    stepper = makeStepper(ctrlHost, items.length, (k) => {
+      const shown = items.slice(0, k + 1);
+      const cur = items[k];
+      const ul = el('ul', { class: 'itemlist' });
+      shown.forEach((it, i) => {
+        const li = el('li', { class: i === k ? 'hl' : '' }, rawItem(G, it));
+        if (!it.kernel && !shown.slice(0, i).some((x) => !x.kernel)) li.classList.add('sepk');
+        ul.append(li);
+      });
+      let why;
+      if (cur.kernel) why = which === 0 ? 'Ponto de partida: o item da produção aumentada, com lookahead eof.' : 'Item do núcleo: veio de goto(CC0, B) — o ponto pulou o B nos dois itens [A → • B C, a] e [A → • B C f, a].';
+      else {
+        const src = cur.from.item;
+        const Y = G.prods[cur.p].lhs;
+        const seq = [...cur.from.beta, src.la];
+        why = `No item ${rawItem(G, src)} o ponto está antes de ${Y}. Depois de ${Y} vem β = ${cur.from.beta.join(' ') || 'ε (nada)'}; lookahead ℓ = ${src.la}. FIRST(${seq.join(' ')}) = {${cur.from.las.join(', ')}} ⇒ entra ${rawItem(G, cur)}.`;
+      }
+      box.replaceChildren(el('div', { class: 'cols' }, el('div', { class: 'statecard' }, el('h4', {}, `CC${which}`), el('div', { class: 'scroll-x' }, ul)), el('div', { class: 'explain' }, el('p', {}, why))));
+    }, { ms: 1500 });
+  }
+  draw();
+};
+
+W.compareMethods = (h) => {
+  const m = model(h.dataset.ex);
+  let method = h.dataset.method || 'slr';
+  const methods = (h.dataset.methods || 'lr0,slr,lr1,lalr').split(',');
+  const body = el('div');
+  h.append(el('div', { class: 'toolbar' }, el('span', { class: 'stepinfo' }, 'Preencher com:'), seg(methods.map((x) => [x, METHOD_NAME[x]]), method, (v) => { method = v; draw(); })), body);
+  const draw = () => body.replaceChildren(tableBox(m.T[method], { showWhy: true, prods: false }).el);
+  draw();
+};
+
+W.robotCheck = (h) => {
+  const m = model('robo');
+  const T = m.T.lr1;
+  let seq = ['↓', '↑', '↓'];
+  const view = el('div');
+  const add = (c) => { seq.push(c); draw(); };
+  h.append(el('div', { class: 'toolbar' },
+    el('button', { class: 'btn', type: 'button', onclick: () => add('↓') }, '↓ põe maçã'),
+    el('button', { class: 'btn', type: 'button', onclick: () => add('↑') }, '↑ tira maçã'),
+    el('button', { class: 'btn', type: 'button', onclick: () => { seq.pop(); draw(); } }, 'Apagar último'),
+    el('button', { class: 'btn', type: 'button', onclick: () => { seq = []; draw(); } }, 'Limpar'),
+    ...[['↓ ↓ ↑ ↑', 'válida'], ['↓ ↑ ↓', 'válida'], ['↓ ↑ ↑ ↓', 'inválida'], ['↓ ↑ ↓ ↑ ↑', 'inválida']].map(([s]) => el('button', { class: 'btn', type: 'button', onclick: () => { seq = s.split(' '); draw(); } }, s))), view);
+  function draw() {
+    let bal = 0;
+    let firstBad = -1;
+    const bars = seq.map((c, i) => { bal += c === '↓' ? 1 : -1; if (bal < 0 && firstBad < 0) firstBad = i; return bal; });
+    const valid = firstBad < 0;
+    const res = LR.run(T, seq);
+    const W2 = Math.max(seq.length, 1) * 34 + 40;
+    const maxB = Math.max(2, ...bars.map(Math.abs));
+    const H2 = 120;
+    const y0 = H2 / 2;
+    const sc = (H2 / 2 - 14) / maxB;
+    const s = sv('svg', { viewBox: `0 0 ${W2} ${H2}`, width: W2, height: H2, role: 'img', 'aria-label': 'Saldo de maçãs a cada prefixo' });
+    s.append(sv('line', { x1: 20, x2: W2 - 10, y1: y0, y2: y0, stroke: 'var(--ink-3)', 'stroke-dasharray': '4 3' }));
+    s.append(sv('text', { x: 4, y: y0 + 4, 'font-size': 11, fill: 'var(--ink-2)' }, '0'));
+    bars.forEach((b, i) => {
+      const x = 28 + i * 34;
+      const hh = Math.abs(b) * sc;
+      s.append(sv('rect', { x, y: b >= 0 ? y0 - hh : y0, width: 24, height: Math.max(hh, 1.5), rx: 3, fill: b < 0 ? 'var(--conflict)' : 'var(--marker)' }));
+      s.append(sv('text', { x: x + 12, y: H2 - 2, 'text-anchor': 'middle', 'font-size': 13, fill: 'var(--ink)' }, seq[i]));
+    });
+    view.replaceChildren(
+      el('p', { class: 'mono', style: 'font-size:1.1rem' }, seq.length ? seq.join(' ') : '(sequência vazia)'),
+      el('div', { class: 'diagram', style: 'max-width:100%' }, s),
+      el('div', { class: `note ${valid ? 'ok' : 'err'}` }, valid ? 'Válida: nenhum prefixo tira mais maçãs do que pôs.' : `Inválida: no prefixo de tamanho ${firstBad + 1} o saldo fica negativo.`),
+      el('p', {}, `Parser LR(1) da gramática: ${res.ok ? 'aceita' : 'rejeita'} em ${res.steps.length} passos — ${res.ok === valid ? 'concorda com a regra do saldo.' : 'DISCORDA (não deveria acontecer).'}`));
+  }
+  draw();
+};
+
+W.lab = (h) => {
+  const ta = el('textarea', { class: 'gram', id: 'lab-gram', spellcheck: 'false', 'aria-label': 'Gramática' }, 'E -> E + T | T\nT -> T * F | F\nF -> ( E ) | id');
+  const inp = el('input', { type: 'text', id: 'lab-in', value: 'id + id * id', 'aria-label': 'Entrada de teste' });
+  const btn = el('button', { class: 'btn primary', type: 'button' }, 'Construir');
+  const out = el('div');
+  const presets = [
+    ['Expressões', 'E -> E + T | T\nT -> T * F | F\nF -> ( E ) | id', 'id + id * id'],
+    ['Não é SLR (aula)', 'Cmd -> Lhs = Rhs | Rhs\nLhs -> * Rhs | id\nRhs -> Lhs', 'id = * id'],
+    ['LR(1) mas não LALR', 'S -> a A d | b B d | a B e | b A e\nA -> c\nB -> c', 'a c d'],
+    ['Ambígua', 'E -> E + E | id', 'id + id + id'],
+  ];
+  h.append(el('div', { class: 'cols' },
+    el('div', {}, el('label', { for: 'lab-gram', class: 'stepinfo' }, 'Gramática (uma linha por não terminal; use | para alternativas e ε para vazio). A primeira linha define o símbolo inicial.'), ta,
+      el('div', { class: 'toolbar' }, el('span', { class: 'stepinfo' }, 'Exemplos:'), ...presets.map(([n, g, i]) => el('button', { class: 'btn', type: 'button', onclick: () => { ta.value = g; inp.value = i; build(); } }, n)))),
+    el('div', {}, el('div', { class: 'field' }, el('label', { for: 'lab-in' }, 'Entrada de teste:'), inp), el('div', { class: 'toolbar' }, btn), el('p', { class: 'stepinfo' }, 'Compare os quatro métodos: o mesmo autômato LR(0) serve ao LR(0) e ao SLR; LR(1) tem lookaheads nos itens; LALR funde estados LR(1) de mesmo núcleo.'))), out);
+  function build() {
+    out.replaceChildren();
+    let m;
+    try { m = buildModel({ grammar: ta.value, opts: {}, input: inp.value }); } catch (e) { out.append(el('p', { class: 'err-msg' }, e.message)); return; }
+    const G = m.G;
+    const summary = el('div', { class: 'tbl-wrap' }, el('table', { class: 't' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Método'), el('th', {}, 'Estados'), el('th', {}, 'Conflitos'))),
+      el('tbody', {}, ...['lr0', 'slr', 'lr1', 'lalr'].map((k) => el('tr', {}, el('td', {}, METHOD_NAME[k]), el('td', {}, m.C[k].states.length), el('td', { class: m.T[k].conflicts.length ? 'bad' : 'good' }, m.T[k].conflicts.length ? `${m.T[k].conflicts.length} — não é ${METHOD_NAME[k]}` : 'nenhum'))))));
+    const ff = el('div', { class: 'tbl-wrap' }, el('table', { class: 't' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Não terminal'), el('th', {}, 'FIRST'), el('th', {}, 'FOLLOW'))),
+      el('tbody', {}, ...G.nonterms.map((n) => el('tr', {}, el('td', { class: 'mono' }, n), el('td', { class: 'mono' }, `{${[...G.FIRST[n]].join(', ')}}`), el('td', { class: 'mono' }, `{${[...G.FOLLOW[n]].join(', ')}}`))))));
+    const wb = el('div');
+    out.append(el('h3', {}, 'Resumo'), el('div', { class: 'cols' }, summary, ff), el('h3', {}, 'Bancada'), wb);
+    workbench(wb, { ...m, spec: { ...m.spec, input: inp.value } }, { methods: ['lr0', 'slr', 'lr1', 'lalr'], method: 'lr1', tabs: ['auto', 'build', 'table', 'trace'], mode: 'full', input: inp.value });
+  }
+  btn.onclick = build;
+  build();
+};
+
+/* ---------- Q2: SDD de números binários (atributos herdados e sintetizados) ---------- */
+W.binary = (h) => {
+  const inp = el('input', { type: 'text', value: '-110', id: 'bin-in', 'aria-label': 'Número binário com sinal' });
+  const btn = el('button', { class: 'btn primary', type: 'button' }, 'Montar árvore');
+  const body = el('div');
+  h.append(el('div', { class: 'field' }, el('label', { for: 'bin-in' }, 'Número:'), inp, btn), body);
+  const T = model('bin').T.lalr;
+  const run = () => {
+    body.replaceChildren();
+    const toks = [...inp.value.replace(/\s/g, '')];
+    if (!toks.length || toks.some((c) => !'+-01'.includes(c))) { body.append(el('p', { class: 'err-msg' }, 'Use um sinal seguido de bits, por exemplo -110 ou +101.')); return; }
+    let idc = 0;
+    const res = LR.run(T, toks, {
+      shift: (t) => ({ id: idc++, sym: t.sym, kids: [], attrs: {} }),
+      reduce: (p, vals) => ({ id: idc++, sym: p.lhs, prod: p, kids: vals, attrs: {} }),
+    });
+    if (!res.ok) { body.append(el('p', { class: 'err-msg' }, 'Entrada fora da gramática: Number → Sign List (ex.: -110).')); return; }
+    const root = res.value;
+    const steps = [];
+    const sub = (n, k) => (k ? `${n.sym}₁` : n.sym);
+    const visit = (n) => {
+      const p = n.prod;
+      if (!p) return;
+      const rhs = p.rhs.join(' ');
+      if (p.lhs === 'Number') {
+        const [sg, list] = n.kids;
+        list.attrs.pos = 0; steps.push({ n: list, a: 'pos', inh: true, rule: 'List.pos := 0', v: 0 });
+        visit(sg); visit(list);
+        n.attrs.val = sg.attrs.neg ? -list.attrs.val : list.attrs.val;
+        steps.push({ n, a: 'val', rule: `Number.val := ${sg.attrs.neg ? '-List.val' : 'List.val'} (Sign.neg = ${sg.attrs.neg})`, v: n.attrs.val });
+      } else if (p.lhs === 'Sign') {
+        n.attrs.neg = rhs === '-'; steps.push({ n, a: 'neg', rule: `Sign.neg := ${n.attrs.neg}`, v: n.attrs.neg });
+      } else if (p.lhs === 'List' && n.kids.length === 2) {
+        const [l1, bit] = n.kids;
+        l1.attrs.pos = n.attrs.pos + 1; steps.push({ n: l1, a: 'pos', inh: true, rule: `List₁.pos := List.pos + 1 = ${n.attrs.pos} + 1`, v: l1.attrs.pos });
+        bit.attrs.pos = n.attrs.pos; steps.push({ n: bit, a: 'pos', inh: true, rule: `Bit.pos := List.pos = ${n.attrs.pos}`, v: bit.attrs.pos });
+        visit(l1); visit(bit);
+        n.attrs.val = l1.attrs.val + bit.attrs.val; steps.push({ n, a: 'val', rule: `List.val := List₁.val + Bit.val = ${l1.attrs.val} + ${bit.attrs.val}`, v: n.attrs.val });
+      } else if (p.lhs === 'List') {
+        const [bit] = n.kids;
+        bit.attrs.pos = n.attrs.pos; steps.push({ n: bit, a: 'pos', inh: true, rule: `Bit.pos := List.pos = ${n.attrs.pos}`, v: bit.attrs.pos });
+        visit(bit);
+        n.attrs.val = bit.attrs.val; steps.push({ n, a: 'val', rule: `List.val := Bit.val = ${bit.attrs.val}`, v: n.attrs.val });
+      } else if (p.lhs === 'Bit') {
+        n.attrs.val = rhs === '1' ? 2 ** n.attrs.pos : 0;
+        steps.push({ n, a: 'val', rule: rhs === '1' ? `Bit.val := 2^Bit.pos = 2^${n.attrs.pos}` : 'Bit.val := 0', v: n.attrs.val });
+      }
+    };
+    visit(root);
+    const ctrl = el('div');
+    const exp = el('div', { class: 'explain' });
+    const diag = el('div', { class: 'diagram' });
+    body.append(ctrl, exp, diag);
+    makeStepper(ctrl, steps.length + 1, (k) => {
+      const known = new Map();
+      steps.slice(0, k).forEach((s) => { if (!known.has(s.n.id)) known.set(s.n.id, {}); known.get(s.n.id)[s.a] = s; });
+      const cur = k > 0 ? steps[k - 1] : null;
+      const conv = (n) => {
+        const ks = known.get(n.id) || {};
+        const subs = [];
+        if (ks.pos) subs.push({ text: `↓ pos=${ks.pos.v}`, cls: 'inh' });
+        if (ks.neg) subs.push({ text: `↑ neg=${ks.neg.v}`, cls: 'syn' });
+        if (ks.val) subs.push({ text: `↑ val=${ks.val.v}`, cls: 'syn' });
+        return { label: n.sym, subs, cls: cur && cur.n.id === n.id ? 'focus' : '', kids: n.kids.map(conv) };
+      };
+      drawForest(diag, [conv(root)], { gapY: 30 });
+      if (!cur) { exp.className = 'explain'; exp.innerHTML = '<p>Árvore construída pelo parser; nenhum atributo calculado ainda. Avance para avaliar na ordem das dependências.</p>'; return; }
+      exp.className = `explain ${cur.inh ? 'k-s' : 'k-r'}`;
+      exp.innerHTML = `<p><b>${esc(cur.rule)}</b> → ${esc(String(cur.v))}</p><p class="stepinfo">${cur.inh ? 'Atributo <b>herdado</b>: vem do pai (desce na árvore).' : 'Atributo <b>sintetizado</b>: calculado a partir dos filhos (sobe na árvore).'}</p>`;
+    }, { ms: 900 });
+  };
+  btn.onclick = run;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+  run();
+};
+
+/* ---------- Q2 · Lista 2 · Ex. 1: AST de 1 - (3 + 2) ---------- */
+W.astBuild = (h) => {
+  let idc = 0;
+  const mk = (label, kids = []) => ({ id: idc++, label, kids });
+  sdtStepper(h, {
+    key: 'expr', input: '1 - (3 + 2)', lex: (t) => { idc = 0; return lexExpr(t); },
+    shift: (t) => t,
+    reduce: (p, v) => {
+      const r = p.rhs.join(' ');
+      if (r === 'E + T') { const n = mk('Plus', [v[0], v[2]]); return { val: n, act: 'E.node := mkNodePlus(E₁.node, T.node)' }; }
+      if (r === 'E - T') { const n = mk('Minus', [v[0], v[2]]); return { val: n, act: 'E.node := mkNodeMinus(E₁.node, T.node)' }; }
+      if (r === 'T') return { val: v[0], act: 'E.node := T.node   (repassa o mesmo nó)' };
+      if (r === '( E )') return { val: v[1], act: 'T.node := E.node   (parênteses não viram nó)' };
+      if (r === 'intLit') { const n = mk(`Int(${v[0].lexeme})`); return { val: n, act: `T.node := mkNodeInt(${v[0].lexeme})` }; }
+      const n = mk(`Float(${v[0].lexeme})`); return { val: n, act: `T.node := mkNodeFloat(${v[0].lexeme})` };
+    },
+    view: (host, ctx) => {
+      const roots = ctx.stack.filter((e) => e.val && e.val.label).map((e) => e.val);
+      const createdId = ctx.created && ctx.created.label ? ctx.created.id : -1;
+      const conv = (n) => ({ label: n.label, shape: 'pill', cls: n.id === createdId ? 'new' : '', kids: n.kids.map(conv) });
+      host.replaceChildren(el('div', { class: 'stepinfo' }, ctx.last ? 'AST final:' : 'Nós da AST apontados pela pilha (.node de cada símbolo):'));
+      const d = el('div', { class: 'diagram' });
+      host.append(d);
+      if (roots.length) drawForest(d, roots.map(conv)); else d.append(el('p', { class: 'stepinfo', style: 'padding:10px' }, 'Nenhum nó criado ainda.'));
+    },
+  });
+};
+
+/* ---------- Q2 · Lista 2 · Ex. 2: interpretador com str/type/val ---------- */
+const fmtVal = (type, v) => (type === 'float' ? (Number.isInteger(v) ? v.toFixed(1) : String(parseFloat(v.toPrecision(12)))) : String(v));
+W.interp = (h) => {
+  const cast = (type, v) => (type === 'float' ? Number(v) : Math.trunc(Number(v)));
+  sdtStepper(h, {
+    key: 'expr', input: '1 - (3.5 + 2)', lex: (t) => lexExpr(t),
+    shift: (t) => t,
+    reduce: (p, v) => {
+      const r = p.rhs.join(' ');
+      if (r === 'E + T' || r === 'E - T') {
+        const op = p.rhs[1];
+        const type = v[0].type === 'float' || v[2].type === 'float' ? 'float' : 'int';
+        const a = cast(type, v[0].val);
+        const b = cast(type, v[2].val);
+        const val = op === '+' ? a + b : a - b;
+        return { val: { str: `(${v[0].str} ${op} ${v[2].str})`, type, val }, act: `E.type := ${type}; E.val := cast(${type}, ${fmtVal(v[0].type, v[0].val)}) ${op} cast(${type}, ${fmtVal(v[2].type, v[2].val)}) = ${fmtVal(type, val)}` };
+      }
+      if (r === 'T') return { val: v[0], act: 'E.str := T.str; E.type := T.type; E.val := T.val' };
+      if (r === '( E )') return { val: v[1], act: 'T.str := E.str; T.type := E.type; T.val := E.val' };
+      const type = r === 'intLit' ? 'int' : 'float';
+      return { val: { str: v[0].lexeme, type, val: cast(type, v[0].lexeme) }, act: `T.str := "${v[0].lexeme}"; T.type := ${type}; T.val := cast(${type}, "${v[0].lexeme}")` };
+    },
+    view: (host, ctx) => {
+      const rows = ctx.stack.map((e) => el('tr', { class: ctx.created && e.val === ctx.created ? 'now' : '' },
+        el('td', { class: 'mono' }, e.sym === 'intLit' || e.sym === 'floatLit' ? `${e.sym} "${e.text}"` : e.sym),
+        el('td', { class: 'mono' }, e.val && e.val.str != null ? `"${e.val.str}"` : '—'),
+        el('td', { class: 'mono' }, e.val && e.val.type ? e.val.type : '—'),
+        el('td', { class: 'mono' }, e.val && e.val.type ? fmtVal(e.val.type, e.val.val) : '—')));
+      host.replaceChildren(el('div', { class: 'stepinfo' }, 'Atributos de cada símbolo na pilha (fundo em cima):'),
+        el('div', { class: 'tbl-wrap' }, el('table', { class: 't trace' }, el('thead', {}, el('tr', {}, el('th', {}, 'Símbolo'), el('th', {}, '.str'), el('th', {}, '.type'), el('th', {}, '.val'))), el('tbody', {}, ...rows))));
+    },
+    onDone: (v) => el('div', { class: 'note ok' }, el('div', { class: 'stepinfo' }, 'Start → E { println(E.str + " = " + E.val) } imprime:'), el('div', { class: 'mono', style: 'font-size:1.15rem' }, `${v.str} = ${fmtVal(v.type, v.val)}`)),
+  });
+};
+
+/* ---------- Q2 · Lista 2 · Ex. 4: pós-fixa e prefixa ---------- */
+W.posPre = (h) => {
+  let idc = 0;
+  sdtStepper(h, {
+    key: 'posf', input: '9 + 5 * 2', lex: (t) => { idc = 0; return lexExpr(t, false, '+*'); },
+    shift: (t) => ({ id: idc++, label: t.sym === 'intLit' ? `intLit ${t.text}` : t.sym, kids: [], leaf: true, lexeme: t.text }),
+    reduce: (p, v) => {
+      const r = p.rhs.join(' ');
+      const node = { id: idc++, label: p.lhs, kids: v };
+      if (r === 'E + T' || r === 'T * F') {
+        const op = p.rhs[1];
+        node.pos = `${v[0].pos} ${v[2].pos} ${op}`;
+        node.pre = `${op} ${v[0].pre} ${v[2].pre}`;
+        const L = p.rhs[0];
+        return { val: node, act: `${p.lhs}.pos := fmt("%s %s ${op}", ${L}₁.pos, ${p.rhs[2]}.pos) = "${node.pos}" ;  ${p.lhs}.pre := fmt("${op} %s %s", ${L}₁.pre, ${p.rhs[2]}.pre) = "${node.pre}"` };
+      }
+      if (r === 'intLit') { node.pos = node.pre = v[0].lexeme; return { val: node, act: `F.pos := F.pre := intLit.lexeme = ${v[0].lexeme}` }; }
+      node.pos = v[0].pos; node.pre = v[0].pre;
+      return { val: node, act: `${p.lhs}.pos := ${p.rhs[0]}.pos ;  ${p.lhs}.pre := ${p.rhs[0]}.pre   (repassa)` };
+    },
+    view: (host, ctx) => {
+      const createdId = ctx.created ? ctx.created.id : -1;
+      const conv = (n) => ({ label: n.label, cls: n.id === createdId ? 'new' : '', subs: n.leaf ? [] : [{ text: `pos: ${n.pos}`, cls: 'syn' }, { text: `pre: ${n.pre}`, cls: 'inh' }], kids: n.kids.map(conv) });
+      const d = el('div', { class: 'diagram' });
+      host.replaceChildren(el('div', { class: 'stepinfo' }, ctx.last ? 'Árvore de sintaxe concreta anotada:' : 'Subárvores concretas na pilha (com .pos e .pre já calculados):'), d);
+      drawForest(d, ctx.stack.map((e) => conv(e.val)), { gapY: 26 });
+    },
+    onDone: (v) => el('div', { class: 'note ok' }, el('div', {}, 'Pós-fixa: ', el('b', { class: 'mono' }, v.pos)), el('div', {}, 'Prefixa: ', el('b', { class: 'mono' }, v.pre))),
+  });
+};
+
+/* ---------- Q2 · Ex. 4c: impressão imediata (pós-fixa funciona; prefixa exige a árvore) ---------- */
+W.printScheme = (h) => {
+  let out = [];
+  sdtStepper(h, {
+    key: 'posf', input: '9 + 5 * 2', lex: (t) => { out = []; return lexExpr(t, false, '+*'); },
+    shift: (t) => t,
+    reduce: (p, v) => {
+      const r = p.rhs.join(' ');
+      if (r === 'E + T') { out.push('+'); return { val: null, out: out.slice(), act: 'print("+")' }; }
+      if (r === 'T * F') { out.push('*'); return { val: null, out: out.slice(), act: 'print("*")' }; }
+      if (r === 'intLit') { out.push(v[0].text); return { val: null, out: out.slice(), act: `print(${v[0].text})` }; }
+      return { val: null, act: '{ }   (nada a imprimir)' };
+    },
+    view: (host, ctx) => {
+      const printed = ctx.out;
+      host.replaceChildren(el('div', { class: 'stepinfo' }, 'Saída impressa até aqui:'), el('div', { class: 'panel mono', style: 'font-size:1.2rem;min-height:2.4em' }, printed.join(' ') || ' '));
+    },
+  });
+};
+
+W.preorder = (h) => {
+  const tree = { label: 'E', kids: [{ label: 'E', kids: [{ label: 'T', kids: [{ label: 'F', kids: [{ label: '9', leaf: true, kids: [] }] }] }] }, { label: '+', leaf: true, op: true, kids: [] }, { label: 'T', kids: [{ label: 'T', kids: [{ label: 'F', kids: [{ label: '5', leaf: true, kids: [] }] }] }, { label: '*', leaf: true, op: true, kids: [] }, { label: 'F', kids: [{ label: '2', leaf: true, kids: [] }] }] }] };
+  // Pré-ordem "semântica": no nó binário, imprime o operador antes dos dois operandos.
+  const order = [];
+  let idc = 0;
+  const tag = (n) => { n.id = idc++; n.kids.forEach(tag); };
+  tag(tree);
+  const pre = (n) => {
+    if (n.kids.length === 3) { order.push({ n: n.kids[1], out: n.kids[1].label }); pre(n.kids[0]); pre(n.kids[2]); }
+    else if (n.kids.length === 1) pre(n.kids[0]);
+    else order.push({ n, out: n.label });
+  };
+  pre(tree);
+  const ctrl = el('div');
+  const d = el('div', { class: 'diagram' });
+  const o = el('div', { class: 'panel mono', style: 'font-size:1.2rem;margin-top:8px' });
+  h.append(ctrl, d, o);
+  makeStepper(ctrl, order.length + 1, (k) => {
+    const done = new Set(order.slice(0, k).map((x) => x.n.id));
+    const cur = k ? order[k - 1].n.id : -1;
+    const conv = (n) => ({ label: n.label, cls: n.id === cur ? 'new' : done.has(n.id) ? 'focus' : '', kids: n.kids.map(conv) });
+    drawForest(d, [conv(tree)]);
+    o.textContent = order.slice(0, k).map((x) => x.out).join(' ') || ' ';
+  }, { ms: 900 });
+};
+
+/* ---------- Q2 · Ex. 3: a(i) é chamada ou acesso a array? ---------- */
+W.applyNode = (h) => {
+  const opts = [
+    ['fun', 'a é função: FUNCTION A(I)'],
+    ['arr', 'a é array: INTEGER A(10)'],
+    ['var', 'a é variável simples'],
+    ['none', 'a não foi declarado'],
+  ];
+  const body = el('div');
+  h.append(el('div', { class: 'toolbar' }, seg(opts.map(([v, l]) => [v, l]), 'fun', (v) => draw(v))), body);
+  function draw(v) {
+    const before = { label: 'Apply "a"', shape: 'pill', kids: [{ label: 'ExprList', kids: [{ label: 'Object i', shape: 'pill', kids: [] }] }] };
+    let after;
+    let note;
+    if (v === 'fun') { after = { label: 'Call a', shape: 'pill', cls: 'focus', kids: [{ label: 'Object i', shape: 'pill', kids: [] }] }; note = ['ok', 'lookup("a") devolve uma entrada de <b>função</b>: o nó vira chamada. Verifica-se número e tipos dos argumentos contra os parâmetros; o tipo da expressão é o tipo de retorno.']; }
+    else if (v === 'arr') { after = { label: 'ArrayIndex a', shape: 'pill', cls: 'focus', kids: [{ label: 'Object i', shape: 'pill', kids: [] }] }; note = ['ok', 'lookup("a") devolve uma entrada de <b>array</b>: o nó vira acesso a elemento. Verifica-se o número de índices (dimensões) e que cada índice é inteiro; o tipo da expressão é o tipo do elemento.']; }
+    else if (v === 'var') { after = { label: 'Apply "a"', shape: 'pill', cls: 'err', kids: [{ label: 'Object i', shape: 'pill', kids: [] }] }; note = ['err', 'lookup("a") encontra uma variável escalar: ela não pode ser chamada nem indexada. Reporta o erro (“a não é função nem array”) e continua.']; }
+    else { after = { label: 'Apply "a"', shape: 'pill', cls: 'err', kids: [{ label: 'Object i', shape: 'pill', kids: [] }] }; note = ['err', 'lookup("a") falha: identificador não declarado. Reporta o erro, marca o tipo como NoType/erro e continua a análise.']; }
+    const d1 = el('div', { class: 'diagram' });
+    const d2 = el('div', { class: 'diagram' });
+    body.replaceChildren(el('div', { class: 'cols' }, el('div', {}, el('div', { class: 'stepinfo' }, 'Saída do parser (nó genérico):'), d1), el('div', {}, el('div', { class: 'stepinfo' }, 'Depois da análise semântica:'), d2)), el('div', { class: `note ${note[0]}`, html: note[1] }));
+    drawForest(d1, [before]);
+    drawForest(d2, [after]);
+  }
+  draw('fun');
+};
+
+/* ---------- Q2 · Ex. 5/6: AST com let horizontal + tabela de símbolos ---------- */
+const COOL_AST = {
+  id: 'prog', label: 'Program', kids: [
+    { id: 'cls', label: 'Class Main : IO', kids: [
+      { id: 'attr', label: 'Attr z₀ : String', kids: [{ id: 'strA', label: 'Str "A"', shape: 'pill', kids: [] }] },
+      { id: 'meth', label: 'Method main : Object', kids: [
+        { id: 'let', label: 'Let (4 filhos)', kids: [
+          { id: 'dx', label: 'Decl x₁ : Int', kids: [{ id: 'oz1', label: 'Object z', shape: 'pill', obj: 'z', kids: [] }] },
+          { id: 'dy', label: 'Decl y₁ : Int', kids: [
+            { id: 'let2', label: 'Let', kids: [
+              { id: 'dy2', label: 'Decl y₂ : Int', kids: [{ id: 'i5', label: 'Int 5', shape: 'pill', kids: [] }] },
+              { id: 'plus2', label: 'Plus', shape: 'pill', kids: [
+                { id: 'oy2', label: 'Object y', shape: 'pill', obj: 'y', kids: [] },
+                { id: 'ow', label: 'Object w', shape: 'pill', obj: 'w', kids: [] }] }] }] },
+          { id: 'dz', label: 'Decl z₁ : Int', kids: [{ id: 'i10', label: 'Int 10', shape: 'pill', kids: [] }] },
+          { id: 'call', label: 'Call out_string', kids: [
+            { id: 'self', label: 'Object self', shape: 'pill', obj: 'self', kids: [] },
+            { id: 'plusA', label: 'Plus', shape: 'pill', kids: [
+              { id: 'plusB', label: 'Plus', shape: 'pill', kids: [
+                { id: 'ox', label: 'Object x', shape: 'pill', obj: 'x', kids: [] },
+                { id: 'oy', label: 'Object y', shape: 'pill', obj: 'y', kids: [] }] },
+              { id: 'oz', label: 'Object z', shape: 'pill', obj: 'z', kids: [] }] }] }] }] }] }] };
+
+const SCOPE_STEPS = [
+  { node: 'cls', op: 'enter', scope: 'SMain', parent: null, msg: 'Visita Class Main → enter_scope: cria a tabela S_Main (pai: escopo global com as classes).' },
+  { node: 'cls', op: 'insert', scope: 'SMain', entries: [['z₀', 'atributo', 'String'], ['self', 'var', 'SELF_TYPE_Main'], ['main', 'método', '() : Object']], msg: 'Insere as features da classe: atributo z₀ : String, self e o método main (visíveis em toda a classe). out_string vem de IO, no ambiente de métodos.' },
+  { node: 'strA', op: 'visit', msg: 'Visita o inicializador "A": literal, nenhuma busca.' },
+  { node: 'meth', op: 'visit', msg: 'Visita o método main (sem parâmetros: o escopo de parâmetros ficaria vazio e foi omitido).' },
+  { node: 'let', op: 'enter', scope: 'SLet', parent: 'SMain', msg: 'Visita o Let externo → enter_scope: cria S_Let, vazia, com ponteiro para S_Main.' },
+  { node: 'oz1', op: 'lookup', name: 'z', path: ['SLet', 'SMain'], found: ['SMain', 'z₀'], msg: 'Declaração de x: primeiro o inicializador. lookup("z"): S_Let ainda está vazia → sobe para S_Main → acha z₀ : String. Anota use(z) → z₀.' },
+  { node: 'dx', op: 'insert', scope: 'SLet', entries: [['x₁', 'var', 'Int']], msg: 'Só agora insere x₁ : Int em S_Let (o inicializador foi analisado antes da variável existir).' },
+  { node: 'let2', op: 'enter', scope: 'SLet2', parent: 'SLet', msg: 'Inicializador de y é outro Let → enter_scope: cria S_Let2 com pai S_Let.' },
+  { node: 'i5', op: 'visit', msg: 'Inicializador 5: literal.' },
+  { node: 'dy2', op: 'insert', scope: 'SLet2', entries: [['y₂', 'var', 'Int']], msg: 'Insere y₂ : Int em S_Let2.' },
+  { node: 'oy2', op: 'lookup', name: 'y', path: ['SLet2'], found: ['SLet2', 'y₂'], msg: 'lookup("y") a partir de S_Let2 → acha y₂ no próprio escopo. use(y) → y₂.' },
+  { node: 'ow', op: 'lookup', name: 'w', path: ['SLet2', 'SLet', 'SMain'], found: null, msg: 'lookup("w"): S_Let2 → S_Let → S_Main → não existe. Reporta “w não declarado” e continua a construção.' },
+  { node: 'let2', op: 'exit', scope: 'SLet2', msg: 'Fim do Let interno → exit_scope: volta para S_Let. S_Let2 não é apagada (tabela persistente): use(y) continua apontando para y₂.' },
+  { node: 'dy', op: 'insert', scope: 'SLet', entries: [['y₁', 'var', 'Int']], msg: 'Insere y₁ : Int em S_Let — é uma entrada diferente de y₂.' },
+  { node: 'i10', op: 'visit', msg: 'Inicializador 10: literal.' },
+  { node: 'dz', op: 'insert', scope: 'SLet', entries: [['z₁', 'var', 'Int']], msg: 'Insere z₁ : Int em S_Let. A partir daqui, z dentro do let esconde o atributo z₀.' },
+  { node: 'self', op: 'lookup', name: 'self', path: ['SLet', 'SMain'], found: ['SMain', 'self'], msg: 'Corpo: chamada out_string sobre self (implícito). lookup("self") → S_Main.' },
+  { node: 'ox', op: 'lookup', name: 'x', path: ['SLet'], found: ['SLet', 'x₁'], msg: 'lookup("x") → x₁ em S_Let.' },
+  { node: 'oy', op: 'lookup', name: 'y', path: ['SLet'], found: ['SLet', 'y₁'], msg: 'lookup("y") → y₁ em S_Let (S_Let2 não está no caminho: não é ancestral do escopo atual).' },
+  { node: 'oz', op: 'lookup', name: 'z', path: ['SLet'], found: ['SLet', 'z₁'], msg: 'lookup("z") → z₁ em S_Let. Mesmo nome do primeiro uso, outra declaração!' },
+  { node: 'let', op: 'exit', scope: 'SLet', msg: 'Fim do Let externo → exit_scope. Depois saem o método e a classe; todas as tabelas continuam existindo.' },
+];
+const DECL_COLOR = { 'z₀': 'var(--goto)', 'x₁': 'var(--shift)', 'y₁': 'var(--accept)', 'y₂': 'var(--reduce)', 'z₁': 'var(--margin-red)', self: 'var(--ink-2)' };
+const SCOPE_NAME = { SMain: 'S_Main', SLet: 'S_Let', SLet2: 'S_Let2' };
+
+function astLabel(id, n = COOL_AST) {
+  if (n.id === id) return n.label;
+  for (const c of n.kids) { const r = astLabel(id, c); if (r) return r; }
+  return null;
+}
+
+function replayScopes(k) {
+  const scopes = {};
+  const order = [];
+  let current = null;
+  const uses = {};
+  const errors = [];
+  for (let i = 0; i <= k; i++) {
+    const s = SCOPE_STEPS[i];
+    if (s.op === 'enter') { scopes[s.scope] = { name: s.scope, parent: s.parent, entries: [], closed: false }; order.push(s.scope); current = s.scope; }
+    if (s.op === 'insert') s.entries.forEach((e) => scopes[s.scope].entries.push({ name: e[0], kind: e[1], type: e[2], step: i }));
+    if (s.op === 'exit') { scopes[s.scope].closed = true; current = scopes[s.scope].parent; }
+    if (s.op === 'lookup') { if (s.found) uses[s.node] = s.found[1]; else { uses[s.node] = null; errors.push(i); } }
+  }
+  return { scopes, order, current, uses, errors };
+}
+
+function scopeTree(state, step) {
+  const wrap = el('div', { class: 'scopes' });
+  const render = (name, depth) => {
+    const sc = state.scopes[name];
+    if (!sc) return;
+    const cls = ['scopebox'];
+    if (state.current === name) cls.push('cur');
+    if (step && step.op === 'lookup' && step.path.includes(name)) cls.push('path');
+    if (sc.closed) cls.push('closed');
+    const rows = sc.entries.map((e) => {
+      const tr = el('tr', {}, el('td', { style: `color:${DECL_COLOR[e.name] || 'inherit'};font-weight:700` }, e.name), el('td', {}, e.kind), el('td', {}, e.type));
+      if (step && step.op === 'insert' && step.scope === name && e.step === SCOPE_STEPS.indexOf(step)) tr.classList.add('newe');
+      if (step && step.op === 'lookup' && step.found && step.found[0] === name && step.found[1] === e.name) tr.classList.add('found');
+      return tr;
+    });
+    if (!rows.length) rows.push(el('tr', { class: 'empty-row' }, el('td', { colspan: 3 }, 'vazia')));
+    const box = el('div', { class: cls.join(' ') }, el('div', { class: 'sh' }, SCOPE_NAME[name], el('i', {}, sc.parent ? `pai → ${SCOPE_NAME[sc.parent]}` : 'pai → global')), el('table', {}, el('tbody', {}, ...rows)));
+    const row = el('div', { style: `margin-left:${depth * 26}px;margin-top:${depth ? 10 : 0}px;position:relative` }, box);
+    if (depth) row.prepend(el('div', { 'aria-hidden': 'true', style: 'position:absolute;left:-16px;top:-10px;width:12px;height:26px;border-left:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3)' }));
+    wrap.append(row);
+    state.order.filter((n) => state.scopes[n].parent === name).forEach((c) => render(c, depth + 1));
+  };
+  render('SMain', 0);
+  return wrap;
+}
+
+function annotatedAst(focus, uses, errorsAt) {
+  const conv = (n) => {
+    const o = { label: n.label, shape: n.shape, kids: n.kids.map(conv), subs: [] };
+    if (n.obj && n.obj !== 'self' && n.id in uses) {
+      if (uses[n.id]) o.subs.push({ text: `use → ${uses[n.id]}`, cls: 'syn' });
+      else { o.subs.push({ text: 'erro: não declarado', cls: '' }); o.cls = 'err'; }
+    }
+    if (n.id === focus) o.cls = (o.cls ? o.cls + ' ' : '') + 'focus';
+    return o;
+  };
+  return conv(COOL_AST);
+}
+
+W.coolAst = (h) => {
+  const d = el('div', { class: 'diagram' });
+  h.append(d);
+  drawForest(d, [annotatedAst(null, {}, [])], { gapX: 10 });
+};
+
+W.scopeWalk = (h) => {
+  const ctrl = el('div');
+  const exp = el('div', { class: 'explain' });
+  const tables = el('div');
+  const ast = el('div', { class: 'diagram' });
+  const log = el('ul', { class: 'log' });
+  h.append(ctrl, el('div', { class: 'cols-even' }, el('div', {}, exp, el('h3', {}, 'Operações até aqui'), el('div', { class: 'panel', style: 'max-height:220px;overflow:auto;padding:0' }, log)), el('div', {}, el('div', { class: 'stepinfo' }, 'Tabelas (cada uma aponta para o escopo anterior):'), tables)), el('div', { class: 'stepinfo', style: 'margin-top:10px' }, 'AST: nó visitado em azul; cada Object ganha use → declaração.'), ast);
+  makeStepper(ctrl, SCOPE_STEPS.length, (k) => {
+    const st = replayScopes(k);
+    const s = SCOPE_STEPS[k];
+    exp.className = `explain ${s.op === 'lookup' && !s.found ? 'k-err' : s.op === 'lookup' ? 'k-acc' : s.op === 'insert' ? 'k-r' : ''}`;
+    exp.innerHTML = `<p><b>${{ enter: 'enter_scope', exit: 'exit_scope', insert: 'insert', lookup: `lookup("${s.name}")`, visit: 'visita' }[s.op]}</b></p><p>${esc(s.msg)}</p>`;
+    tables.replaceChildren(scopeTree(st, s));
+    drawForest(ast, [annotatedAst(s.node, st.uses, st.errors)], { gapX: 10 });
+    log.replaceChildren(...SCOPE_STEPS.slice(0, k + 1).map((x, i) => el('li', { class: `${x.op === 'lookup' && !x.found ? 'e' : ''}${i === k ? ' now' : ''}` }, `${i + 1}. ${x.op === 'lookup' ? `lookup(${x.name}) → ${x.found ? x.found[1] : 'ERRO'}` : x.op === 'insert' ? `insert ${x.entries.map((e) => e[0]).join(', ')} em ${SCOPE_NAME[x.scope]}` : x.op === 'enter' ? `enter_scope ${SCOPE_NAME[x.scope]}` : x.op === 'exit' ? `exit_scope ${SCOPE_NAME[x.scope]}` : 'visita ' + astLabel(x.node)}`)));
+    if (k === SCOPE_STEPS.length - 1) log.lastChild.scrollIntoView({ block: 'nearest' });
+  }, { ms: 1600 });
+};
+
+W.useWhy = (h) => {
+  let mode = 'use';
+  const body = el('div');
+  h.append(el('div', { class: 'toolbar' }, seg([['use', 'Com o ponteiro use (gravado na hora)'], ['redo', 'Sem use: refazer lookup depois']], mode, (v) => { mode = v; draw(); })), body);
+  const rows = [
+    ['z (inicializador de x)', 'z₀ : String', 'z₁ : Int', 'x : Int <- z passa a parecer correto: o erro String ≤ Int some.'],
+    ['y (dentro do let interno)', 'y₂ : Int', 'y₁ : Int (se refeito em S_Let) ou y₂ (se refeito em S_Let2)', 'Depende de qual tabela a fase posterior usar; sem use é preciso guardar e reconstruir o escopo exato de cada ponto.'],
+    ['w', 'não declarado (erro)', 'não declarado (erro)', 'Igual nos dois casos.'],
+    ['x, y, z (corpo)', 'x₁, y₁, z₁', 'x₁, y₁, z₁', 'Iguais: aqui todas as declarações já tinham acontecido.'],
+  ];
+  function draw() {
+    body.replaceChildren(el('div', { class: 'tbl-wrap' }, el('table', { class: 't' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Uso'), el('th', {}, mode === 'use' ? 'use aponta para' : 'lookup refeito no fim (S_Let completa)'), el('th', {}, 'Consequência'))),
+      el('tbody', {}, ...rows.map((r) => el('tr', {}, el('td', {}, r[0]), el('td', { class: 'mono' + (mode === 'redo' && r[1] !== r[2] ? ' bad' : '') }, mode === 'use' ? r[1] : r[2]), el('td', {}, mode === 'use' ? 'Correto: é a declaração visível no ponto do uso.' : r[3])))))));
+  }
+  draw();
+};
+
+/* ---------- Q3: regras de inferência ---------- */
+function rule(prem, conc, name) {
+  return `<span class="rule"><span class="rbody"><span class="prem">${prem.map((p) => `<span>${p}</span>`).join('')}</span><span class="bar"></span><span class="conc">${conc}</span></span>${name ? `<span class="rname">[${name}]</span>` : ''}</span>`;
+}
+W.rule = (h) => {
+  const d = h.dataset;
+  h.classList.add('rulebox');
+  h.innerHTML = rule(d.prem ? d.prem.split('||') : [], d.conc, d.name);
+};
+
+const HIER = { Object: null, Int: 'Object', Bool: 'Object', String: 'Object', IO: 'Object', A: 'Object', B: 'A', C: 'A', D: 'B' };
+const ancestors = (t) => { const out = []; for (let x = t; x; x = HIER[x]) out.push(x); return out; };
+const join = (a, b) => { const A = ancestors(a); return ancestors(b).find((x) => A.includes(x)); };
+W.joinCalc = (h) => {
+  const pos = { Object: [300, 24], Int: [60, 100], Bool: [160, 100], String: [260, 100], IO: [360, 100], A: [480, 100], B: [430, 176], C: [540, 176], D: [430, 252] };
+  let picks = ['D', 'C'];
+  const svgHost = el('div', { class: 'diagram', style: 'max-width:640px' });
+  const out = el('div');
+  h.append(el('p', { class: 'stepinfo' }, 'Toque em dois tipos. A hierarquia é a do quadro (B e C herdam de A; D herda de B), mais os tipos básicos.'), svgHost, out);
+  function draw() {
+    const s = sv('svg', { viewBox: '0 0 620 290', width: 620, height: 290, class: 'hier', role: 'img', 'aria-label': 'Hierarquia de tipos' });
+    for (const [t, p] of Object.entries(HIER)) if (p) s.append(sv('line', { x1: pos[t][0], y1: pos[t][1] - 14, x2: pos[p][0], y2: pos[p][1] + 14 }));
+    const j = picks.length === 2 ? join(picks[0], picks[1]) : null;
+    const anc = new Set(picks.flatMap(ancestors));
+    for (const [t, [x, y]] of Object.entries(pos)) {
+      const cls = ['hn'];
+      if (picks.includes(t)) cls.push('pick');
+      else if (t === j) cls.push('join');
+      else if (anc.has(t)) cls.push('anc');
+      if (t === j && picks.includes(t)) cls.push('join');
+      const g = sv('g', { class: cls.join(' '), tabindex: 0, role: 'button', 'aria-label': t });
+      g.append(sv('rect', { x: x - 36, y: y - 14, width: 72, height: 28, rx: 6 }), sv('text', { x, y: y + 5, 'text-anchor': 'middle' }, t));
+      const pick = () => { picks = [...picks, t].slice(-2); draw(); };
+      g.addEventListener('click', pick);
+      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+      s.append(g);
+    }
+    svgHost.replaceChildren(s);
+    if (picks.length < 2) { out.replaceChildren(el('p', {}, 'Escolha mais um tipo.')); return; }
+    const [a, b] = picks;
+    const le = (x, y) => ancestors(x).includes(y);
+    out.replaceChildren(el('div', { class: 'note ok', html: `<b>${a} ⊔ ${b} = ${j}</b> — o menor tipo que está acima dos dois. Ancestrais de ${a}: ${ancestors(a).join(' ≤ ')}. Ancestrais de ${b}: ${ancestors(b).join(' ≤ ')}. O primeiro em comum é ${j}.` }),
+      el('p', { class: 'mono' }, `${a} ≤ ${b}? ${le(a, b) ? 'sim' : 'não'}   ·   ${b} ≤ ${a}? ${le(b, a) ? 'sim' : 'não'}`),
+      el('p', { html: `Uso no <code>if</code>: <code>if e₀ then (e₁ : ${a}) else (e₂ : ${b}) fi : ${a} ⊔ ${b} = ${j}</code>` }));
+  }
+  draw();
+};
+
+/* Passos da verificação de tipos do Ex. 7 (com erros e sem erros) */
+const LET_ERR = {
+  rows: [
+    ['O₁,M,C ⊢ z : <S1>', '<S1> ≤ Int <C1>'],
+    ['O₂,M,C ⊢ (let y : Int <- 5 in y + w) : <S2>', '<S2> ≤ Int <C2>'],
+    ['O₃,M,C ⊢ 10 : <S3>', '<S3> ≤ Int <C3>'],
+    ['O₄,M,C ⊢ out_string(x + y + z) : <S4>', ''],
+  ],
+  conc: 'O,M,C ⊢ let x : Int <- z, y : Int <- (…), z : Int <- 10 in out_string(x + y + z) : <S4>',
+  steps: [
+    { fill: {}, env: 0, msg: 'Comece pelo nó raiz (o let) e escreva a regra com incógnitas. Ambientes: O₁ = O (contém z : String, self, …), O₂ = O₁[Int/x], O₃ = O₂[Int/y], O₄ = O₃[Int/z]. Para descobrir T₁′…T₄ é preciso visitar os filhos.' },
+    { fill: { S1: 'String' }, env: 1, sub: rule(['O₁(z) = String'], 'O₁,M,C ⊢ z : String', 'Var'), msg: 'Filho 1: o inicializador de x é z. Em O₁ (antes de x, y, z locais existirem) z é o atributo: [Var] dá T₁′ = String.' },
+    { fill: { S1: 'String', C1: '✗' }, env: 1, err: 'x : Int inicializado com String (String ≤ Int é falso).', msg: 'Verifica T₁′ ≤ T₁: String ≤ Int? Não — String e Int são irmãos sob Object. Reporta o erro e continua com o tipo DECLARADO: O₂ = O₁[Int/x].' },
+    { fill: { S1: 'String', C1: '✗', S2: 'NoType' }, env: 2, err: 'w não declarado (y + w).', sub: rule(['O₂,M,C ⊢ 5 : Int', 'Int ≤ Int', rule(['O₂[Int/y] ⊢ y : Int', 'O₂[Int/y] ⊢ w : NoType'], 'O₂[Int/y],M,C ⊢ y + w : NoType', 'Arit. c/ NoType')], 'O₂,M,C ⊢ (let y : Int <- 5 in y + w) : NoType', 'Let'), msg: 'Filho 2: o let interno. 5 : Int ✓. No corpo, y é o y interno (Int) e w não existe: erro, w : NoType. Pela regra do exercício, Int + NoType = NoType. O let tem o tipo do corpo: T₂′ = NoType.' },
+    { fill: { S1: 'String', C1: '✗', S2: 'NoType', C2: '✓' }, env: 2, msg: 'NoType ≤ Int vale (NoType ≤ T para todo T): nenhum erro em cascata. O₃ = O₂[Int/y].' },
+    { fill: { S1: 'String', C1: '✗', S2: 'NoType', C2: '✓', S3: 'Int', C3: '✓' }, env: 3, sub: rule(['10 é literal inteiro'], 'O₃,M,C ⊢ 10 : Int', 'Int'), msg: 'Filho 3: 10 : Int e Int ≤ Int ✓. O₄ = O₃[Int/z] — o z local esconde o atributo z : String.' },
+    { fill: { S1: 'String', C1: '✗', S2: 'NoType', C2: '✓', S3: 'Int', C3: '✓' }, env: 4, sub: rule([rule(['O₄ ⊢ x : Int', 'O₄ ⊢ y : Int'], 'O₄ ⊢ x + y : Int', 'Arit.'), 'O₄ ⊢ z : Int'], 'O₄,M,C ⊢ (x + y) + z : Int', 'Aritmética'), msg: 'Corpo: argumento x + y + z = (x + y) + z. Em O₄ os três são as variáveis locais Int, então o argumento tem tipo Int.' },
+    { fill: { S1: 'String', C1: '✗', S2: 'NoType', C2: '✓', S3: 'Int', C3: '✓', S4: 'SELF_TYPE_Main' }, env: 4, err: 'out_string espera String; recebeu Int (Int ≤ String é falso).', sub: rule(['O₄ ⊢ self : SELF_TYPE_Main', 'O₄ ⊢ x + y + z : Int', 'M(Main, out_string) = (String, SELF_TYPE)', '<span class="bad">Int ≤ String ✗</span>', 'T<sub>R</sub> = SELF_TYPE_Main'], 'O₄,M,C ⊢ out_string(x + y + z) : SELF_TYPE_Main', 'Despacho'), msg: 'Despacho implícito sobre self. Assinatura herdada de IO: out_string(String) : SELF_TYPE. Int ≤ String falha → erro. O tipo de retorno ainda é conhecido: o retorno declarado é SELF_TYPE, então a chamada tem o tipo do receptor, SELF_TYPE_Main. Logo T₄ = SELF_TYPE_Main.' },
+    { fill: { S1: 'String', C1: '✗', S2: 'NoType', C2: '✓', S3: 'Int', C3: '✓', S4: 'SELF_TYPE_Main' }, env: 4, msg: 'Conclusão: o let tem tipo T₄ = SELF_TYPE_Main ≤ Object (retorno declarado de main) ✓. Três erros reportados, e a análise percorreu a árvore inteira. (Política alternativa aceitável: dar NoType à chamada inválida.)' },
+  ],
+};
+const LET_OK = {
+  rows: [
+    ['O₁,M,C ⊢ 10 : <S1>', '<S1> ≤ Int <C1>'],
+    ['O₂,M,C ⊢ (let y : Int <- 5 in y + 5) : <S2>', '<S2> ≤ Int <C2>'],
+    ['O₃,M,C ⊢ 10 : <S3>', '<S3> ≤ Int <C3>'],
+    ['O₄,M,C ⊢ out_int(x + y + z) : <S4>', ''],
+  ],
+  conc: 'O,M,C ⊢ let x : Int <- 10, y : Int <- (…), z : Int <- 10 in out_int(x + y + z) : <S4>',
+  steps: [
+    { fill: {}, env: 0, msg: 'Mesma regra de let com 3 declarações; agora sem erros. Escreva a conclusão e as premissas com incógnitas.' },
+    { fill: { S1: 'Int', C1: '✓' }, env: 1, sub: rule(['10 é literal inteiro'], 'O₁,M,C ⊢ 10 : Int', 'Int'), msg: 'x: 10 : Int e Int ≤ Int ✓. O₂ = O₁[Int/x].' },
+    { fill: { S1: 'Int', C1: '✓', S2: 'Int' }, env: 2, sub: rule(['O₂ ⊢ 5 : Int', 'Int ≤ Int', rule(['O₂[Int/y](y) = Int', 'O₂[Int/y] ⊢ 5 : Int'], 'O₂[Int/y],M,C ⊢ y + 5 : Int', 'Arit.')], 'O₂,M,C ⊢ (let y : Int <- 5 in y + 5) : Int', 'Let'), msg: 'y: o let interno cria O₂[Int/y]; y + 5 : Int; o let interno tem o tipo do corpo: Int.' },
+    { fill: { S1: 'Int', C1: '✓', S2: 'Int', C2: '✓', S3: 'Int', C3: '✓' }, env: 3, msg: 'Int ≤ Int ✓ ⇒ O₃ = O₂[Int/y]. z: 10 : Int ✓ ⇒ O₄ = O₃[Int/z].' },
+    { fill: { S1: 'Int', C1: '✓', S2: 'Int', C2: '✓', S3: 'Int', C3: '✓', S4: 'SELF_TYPE_Main' }, env: 4, sub: rule(['O₄ ⊢ self : SELF_TYPE_Main', rule(['O₄ ⊢ x + y : Int', 'O₄ ⊢ z : Int'], 'O₄ ⊢ (x + y) + z : Int', 'Arit.'), 'M(Main, out_int) = (Int, SELF_TYPE)', 'Int ≤ Int', 'T<sub>R</sub> = SELF_TYPE_Main'], 'O₄,M,C ⊢ out_int(x + y + z) : SELF_TYPE_Main', 'Despacho'), msg: 'Corpo: argumento Int, out_int espera Int ✓. Retorno SELF_TYPE ⇒ tipo do receptor: SELF_TYPE_Main. (Em execução, imprime 10 + 10 + 10 = 30 e devolve self.)' },
+    { fill: { S1: 'Int', C1: '✓', S2: 'Int', C2: '✓', S3: 'Int', C3: '✓', S4: 'SELF_TYPE_Main' }, env: 4, msg: 'Todas as premissas valem: O,M,C ⊢ let … : SELF_TYPE_Main. Nenhum erro.' },
+  ],
+};
+const ENVS_ERR = [
+  'O₁ = O = { z : String, self : SELF_TYPE_Main, … }',
+  'O₂ = O₁[Int/x]',
+  'O₃ = O₂[Int/y]',
+  'O₄ = O₃[Int/z]   (z : Int esconde z : String)',
+];
+function typeStepper(h, data) {
+  const ctrl = el('div');
+  const board = el('div', { class: 'panel rulebox' });
+  const exp = el('div', { class: 'explain' });
+  const sub = el('div', { class: 'rulebox' });
+  const env = el('div', { class: 'panel mono', style: 'font-size:.85rem' });
+  const errs = el('ul', { class: 'log' });
+  h.append(ctrl, board, el('div', { class: 'cols-2-1' }, el('div', {}, exp, el('div', { class: 'stepinfo' }, 'Sub-derivação deste passo:'), sub), el('div', {}, el('div', { class: 'stepinfo' }, 'Ambientes:'), env, el('div', { class: 'stepinfo', style: 'margin-top:8px' }, 'Erros reportados:'), el('div', { class: 'panel', style: 'padding:0' }, errs))));
+  const fillTxt = (s, f) => s.replace(/<(S\d|C\d)>/g, (_, k) => {
+    if (k[0] === 'C') return f[k] ? `<b class="${f[k] === '✓' ? 'good' : 'bad'}">${f[k]}</b>` : '';
+    const i = k.slice(1);
+    const name = i === '4' ? 'T₄' : `T${'₀₁₂₃₄'[i]}′`;
+    return f[k] ? `<span class="slot">${f[k]}</span>` : `<span class="slot empty">${name}</span>`;
+  });
+  makeStepper(ctrl, data.steps.length, (k) => {
+    const s = data.steps[k];
+    board.innerHTML = rule(data.rows.map((r) => fillTxt(r[0], s.fill) + (r[1] ? '&nbsp;&nbsp;&nbsp;' + fillTxt(r[1], s.fill) : '')), fillTxt(data.conc, s.fill), 'Let');
+    $('.prem', board).style.flexDirection = 'column';
+    $('.prem', board).style.alignItems = 'flex-start';
+    exp.className = `explain ${s.err ? 'k-err' : ''}`;
+    exp.innerHTML = `<p>${esc(s.msg)}</p>`;
+    sub.innerHTML = s.sub || '<p class="stepinfo">—</p>';
+    env.innerHTML = data.envs.slice(0, s.env + 1).map((x, i) => `<div${i === s.env ? ' style="font-weight:700"' : ''}>${esc(x)}</div>`).join('');
+    const all = data.steps.slice(0, k + 1).filter((x) => x.err);
+    errs.replaceChildren(...(all.length ? all.map((x, i) => el('li', { class: 'e' }, `${i + 1}. ${x.err}`)) : [el('li', {}, 'nenhum até aqui')]));
+  }, { ms: 2600 });
+}
+const ENVS_OK = ['O₁ = O = { self : SELF_TYPE_Main, … }', 'O₂ = O₁[Int/x]', 'O₃ = O₂[Int/y]', 'O₄ = O₃[Int/z]'];
+W.typeErr = (h) => typeStepper(h, { ...LET_ERR, envs: ENVS_ERR });
+W.typeOk = (h) => typeStepper(h, { ...LET_OK, envs: ENVS_OK });
+
+/* ===================== navegação entre slides ===================== */
+function initDeck() {
+  const slides = $$('.slide');
+  const index = $('#index');
+  const counter = $('#counter');
+  const progress = $('#progress');
+  const mods = { inicio: 'Início', q1: 'Questão 1 · Análise ascendente', q2: 'Questão 2 · Escopo + SDT', q3: 'Questão 3 · Inferência de tipos', fim: 'Treino final' };
+  let curMod = null;
+  let ol = null;
+  slides.forEach((s, i) => {
+    const mod = s.dataset.mod;
+    if (mod !== curMod) {
+      curMod = mod;
+      const [a, b] = mods[mod].split(' · ');
+      index.append(el('h3', { html: b ? `<b>${esc(a)}</b> · ${esc(b)}` : esc(a) }));
+      ol = el('ol');
+      index.append(ol);
+    }
+    const a = el('a', { href: '#' + s.id }, el('span', { class: 'n' }, String(i + 1).padStart(2, '0')), el('span', { html: esc(s.dataset.title) + (s.dataset.key ? '<span class="star" title="Destaque para a prova">★</span>' : '') }));
+    a.addEventListener('click', () => document.body.classList.remove('index-open'));
+    ol.append(el('li', {}, a));
+  });
+  const mounted = new Set();
+  const prevA = $('#prev');
+  const nextA = $('#next');
+  function show(id, scroll = true) {
+    let i = slides.findIndex((s) => s.id === id);
+    if (i < 0) i = 0;
+    slides.forEach((s, j) => { s.hidden = j !== i; });
+    const s = slides[i];
+    if (!mounted.has(s.id)) {
+      mounted.add(s.id);
+      $$('[data-w]', s).forEach((hst) => {
+        try { W[hst.dataset.w](hst); } catch (e) { console.error(e); hst.append(el('p', { class: 'err-msg' }, 'Erro ao montar este exemplo: ' + e.message)); }
+      });
+    }
+    $$('#index a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + s.id ? 'page' : 'false'));
+    const cur = $('#index a[aria-current="page"]');
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
+    counter.textContent = `${i + 1} / ${slides.length}`;
+    progress.style.width = `${((i + 1) / slides.length) * 100}%`;
+    $$('.modtab').forEach((b) => b.setAttribute('aria-current', String(b.dataset.mod === s.dataset.mod)));
+    const p = slides[i - 1];
+    const n = slides[i + 1];
+    prevA.hidden = !p;
+    nextA.hidden = !n;
+    if (p) { prevA.href = '#' + p.id; $('span', prevA).textContent = p.dataset.title; }
+    if (n) { nextA.href = '#' + n.id; $('span', nextA).textContent = n.dataset.title; }
+    $('#mprev').disabled = !p;
+    $('#mnext').disabled = !n;
+    if (scroll) window.scrollTo({ top: 0 });
+    document.title = `${s.dataset.title} · Revisão P2 de Compiladores`;
+    return i;
+  }
+  const curIndex = () => slides.findIndex((s) => !s.hidden);
+  const go = (d) => { const i = curIndex() + d; if (slides[i]) location.hash = slides[i].id; };
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); go(1); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+  });
+  $('#mprev').onclick = () => go(-1);
+  $('#mnext').onclick = () => go(1);
+  $('#menu').onclick = () => document.body.classList.toggle('index-open');
+  $('#scrim').onclick = () => document.body.classList.remove('index-open');
+  $$('.modtab').forEach((b) => { b.onclick = () => { const s = slides.find((x) => x.dataset.mod === b.dataset.mod); if (s) location.hash = s.id; }; });
+  show(location.hash.slice(1), false);
+}
+document.addEventListener('DOMContentLoaded', initDeck);
+
+</script>
+</body>
+</html>
