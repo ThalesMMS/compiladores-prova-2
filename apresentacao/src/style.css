@@ -205,6 +205,10 @@ table.t td.mono, table.t td code { white-space: nowrap; }
 .lrtable th.st, .lrtable td.st { text-align: left; color: var(--ink-2); background: var(--paper); position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
 .lrtable .div { border-left: 2px solid var(--rule); }
 .lrtable td.c { cursor: pointer; }
+.lrtable td.c button {
+  font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; width: 100%; text-align: inherit; cursor: pointer;
+}
+.lrtable td.c button:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px; border-radius: 2px; }
 .lrtable td.c:hover { outline: 2px solid var(--marker); outline-offset: -2px; }
 .lrtable td.empty { color: var(--rule); }
 .lrtable .a-s { color: var(--shift); font-weight: 600; }

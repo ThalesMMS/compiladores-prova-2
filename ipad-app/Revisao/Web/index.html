@@ -215,6 +215,10 @@ table.t td.mono, table.t td code { white-space: nowrap; }
 .lrtable th.st, .lrtable td.st { text-align: left; color: var(--ink-2); background: var(--paper); position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); }
 .lrtable .div { border-left: 2px solid var(--rule); }
 .lrtable td.c { cursor: pointer; }
+.lrtable td.c button {
+  font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; width: 100%; text-align: inherit; cursor: pointer;
+}
+.lrtable td.c button:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px; border-radius: 2px; }
 .lrtable td.c:hover { outline: 2px solid var(--marker); outline-offset: -2px; }
 .lrtable td.empty { color: var(--rule); }
 .lrtable .a-s { color: var(--shift); font-weight: 600; }
@@ -2100,15 +2104,14 @@ function tableBox(T, opts = {}) {
         txt = cell.map((e) => LR.actionText(e, C)).join(' / ');
         cls = cell.length > 1 ? 'c conf' : `c a-${cell[0].type}`;
       }
-      const td = el('td', { class: cls }, txt);
-      td.onclick = () => select(s, t);
+      const td = el('td', { class: cls }, el('button', { type: 'button', 'aria-label': `Ação[${LR.stateLabel(C, s)}, ${t}] = ${cell ? txt : 'vazia'}`, onclick: () => select(s, t) }, txt));
       cells[`${s}|${t}`] = td;
       tr.append(td);
     });
     nts.forEach((n, k) => {
       const j = T.go[s][n];
-      const td = el('td', { class: `c ${j === undefined ? 'empty' : 'a-g'}${k === 0 ? ' div' : ''}` }, j === undefined ? '—' : 'g' + LR.stateLabel(C, j));
-      td.onclick = () => select(s, n);
+      const gtxt = j === undefined ? '—' : 'g' + LR.stateLabel(C, j);
+      const td = el('td', { class: `c ${j === undefined ? 'empty' : 'a-g'}${k === 0 ? ' div' : ''}` }, el('button', { type: 'button', 'aria-label': `Goto[${LR.stateLabel(C, s)}, ${n}] = ${j === undefined ? 'vazia' : gtxt}`, onclick: () => select(s, n) }, gtxt));
       cells[`${s}|${n}`] = td;
       tr.append(td);
     });

@@ -376,15 +376,14 @@ function tableBox(T, opts = {}) {
         txt = cell.map((e) => LR.actionText(e, C)).join(' / ');
         cls = cell.length > 1 ? 'c conf' : `c a-${cell[0].type}`;
       }
-      const td = el('td', { class: cls }, txt);
-      td.onclick = () => select(s, t);
+      const td = el('td', { class: cls }, el('button', { type: 'button', 'aria-label': `Ação[${LR.stateLabel(C, s)}, ${t}] = ${cell ? txt : 'vazia'}`, onclick: () => select(s, t) }, txt));
       cells[`${s}|${t}`] = td;
       tr.append(td);
     });
     nts.forEach((n, k) => {
       const j = T.go[s][n];
-      const td = el('td', { class: `c ${j === undefined ? 'empty' : 'a-g'}${k === 0 ? ' div' : ''}` }, j === undefined ? '—' : 'g' + LR.stateLabel(C, j));
-      td.onclick = () => select(s, n);
+      const gtxt = j === undefined ? '—' : 'g' + LR.stateLabel(C, j);
+      const td = el('td', { class: `c ${j === undefined ? 'empty' : 'a-g'}${k === 0 ? ' div' : ''}` }, el('button', { type: 'button', 'aria-label': `Goto[${LR.stateLabel(C, s)}, ${n}] = ${j === undefined ? 'vazia' : gtxt}`, onclick: () => select(s, n) }, gtxt));
       cells[`${s}|${n}`] = td;
       tr.append(td);
     });

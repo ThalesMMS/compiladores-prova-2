@@ -7,7 +7,7 @@ Mostra a apresentação (`apresentacao/`) em tela cheia, sem internet: as fontes
 1. Conecte o iPad no Mac (cabo, na primeira vez) e toque em **Confiar**.
 2. No iPad: **Ajustes → Privacidade e Segurança → Modo de Desenvolvedor** → ativar (o iPad reinicia).
 3. Abra `Revisao.xcodeproj` no Xcode.
-4. Em **Signing & Capabilities**, confira o **Team** (vem com `H4Q6WN7NV5`; troque se o seu time for outro). Se o Xcode pedir, entre com seu Apple ID em **Xcode → Settings → Accounts**.
+4. Em **Signing & Capabilities**, escolha o seu **Team** (vem com `H4Q6WN7NV5`) e troque o **Bundle Identifier** (`com.thalessantos.revisao-p2`) por um valor só seu, como `com.seunome.revisao-p2`: se o identificador já estiver registrado por outro time, a assinatura falha. Se o Xcode pedir, entre com seu Apple ID em **Xcode → Settings → Accounts**.
 5. Escolha o iPad no seletor de destino, no topo, e aperte **▶ Run** (⌘R).
 
 Com conta paga do Apple Developer Program o app vale por 1 ano; com Apple ID gratuito, por 7 dias (depois é só rodar de novo pelo Xcode).
