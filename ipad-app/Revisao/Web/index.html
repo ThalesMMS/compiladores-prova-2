@@ -3458,8 +3458,8 @@ W.ruleFlips = (host) => {
     const title = heading.textContent.trim();
     const front = el('div', { class: 'rulecard-face rulecard-front' });
     const back = el('div', { class: 'rulecard-face rulecard-back', 'aria-hidden': 'true' });
-    const frontButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Mostrar explicação de ' + title }, '↻ Ver explicação');
-    const backButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Voltar à regra de ' + title }, '↻ Ver fórmula');
+    const frontButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Ver explicação de ' + title }, '↻ Ver explicação');
+    const backButton = el('button', { type: 'button', class: 'rulecard-toggle', 'aria-label': 'Ver fórmula de ' + title }, '↻ Ver fórmula');
     front.append(...[...card.childNodes].filter((node) => node !== explanation), frontButton);
     back.append(el('h4', {}, title + ' · por extenso'), explanation, backButton);
     back.inert = true;
